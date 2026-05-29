@@ -1,0 +1,110 @@
+% Not All Errors Are Equal: Consequence-Aware Reasoning Compute Allocation
+% Target: ICLR 2027 (deadline ~Sept-Oct 2026)
+
+\documentclass{article}
+\usepackage{iclr2026_conference,times}
+
+\input{math_commands.tex}
+
+\usepackage{hyperref}
+\usepackage{url}
+
+\title{Not All Errors Are Equal:\\Consequence-Aware Reasoning Compute Allocation}
+
+% The \author macro works with any number of authors. Use \And or \AND
+% to break the author list across columns; we go anonymous for submission.
+\author{Anonymous authors\\
+Paper under double-blind review}
+
+\newcommand{\fix}{\marginpar{FIX}}
+\newcommand{\new}{\marginpar{NEW}}
+
+\iclrfinalcopy % Uncomment for camera-ready
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+Modern reasoning models---OpenAI's o-series, DeepSeek-R1, Claude with
+extended thinking, and Qwen3-Thinking---allocate test-time compute
+adaptively across tasks: tasks that look harder receive more thinking
+tokens, while easier ones stop earlier. Recent work on adaptive
+test-time compute codifies this difficulty-based heuristic into
+learned routers and confidence-driven early-stopping policies. All of
+these methods share an implicit assumption: compute buys accuracy,
+and accuracy is fungible across tasks.
+
+This assumption breaks in real deployment. The ``remaining error''
+hidden behind a given accuracy carries wildly different costs across
+tasks: a typo in a log message and a database migration that
+silently corrupts a production table both count as a single unit of
+accuracy on a benchmark, but only one of them is worth additional
+compute to avoid. We argue that test-time compute should be
+allocated by expected cost-of-error, not by predicted difficulty.
+
+We propose \emph{consequence-aware} test-time compute allocation. At
+its core is a lightweight predictor that estimates the
+deployment-time cost-of-error of a task directly from its issue
+text; a scheduler then routes higher-consequence tasks to larger
+compute tiers---or larger thinking budgets---under the same total
+budget as a difficulty-based baseline.
+
+We evaluate on 700 software-engineering tasks (SWE-bench Lite and
+Multi-SWE-bench mini), labeled under three independent pipelines, and
+audit three contemporary thinking models. Across all labeling
+pipelines, consequence is statistically orthogonal to difficulty and
+remains a significant predictor of cost-weighted gain after
+controlling for difficulty and cross-model confidence. Current
+thinking models do not allocate compute by consequence: spending is
+either uncorrelated with consequence, saturated at the token cap, or
+weakly leaning but far below the required magnitude. Our issue-only
+predictor never misclassifies a high-consequence task as
+low-consequence in 300 SWE-bench tasks. Under matched compute
+budgets, consequence-aware routing reduces cost-weighted loss by
+more than $30\%$ relative to difficulty-aware routing, and the
+predictor-driven variant retains over $90\%$ of the oracle gain.
+Notably, difficulty-aware routing performs worse than random because
+the hardest tasks are unsolvable at any tier.
+\end{abstract}
+
+\section{Introduction}
+
+% TODO: vignette + formal objective + contributions
+
+\section{Related Work}
+
+% TODO: Snell 2024 / Damani 2024 / Manvi 2024 / Russell-Wefald / Yang-Lin
+
+\section{Consequence as a Construct}
+
+% TODO: definition + F1 orthogonality + P0b confounding
+
+\section{Model Audit}
+
+% TODO: Qwen3-8B / Qwen3-VL / Claude n=171
+
+\section{Predicting Consequence at Deployment Time}
+
+% TODO: predictor + class-2 to class-0 = 0 safety
+
+\section{Method: Cost-Weighted Compute Allocation}
+
+% TODO: formal objective + scheduling algorithm
+
+\section{Experiments}
+
+% TODO: Phase 3b + marginal utility + (#4 in appendix)
+
+\section{Discussion and Limitations}
+
+% TODO
+
+\section{Conclusion}
+
+% TODO
+
+\bibliography{references}
+\bibliographystyle{iclr2026_conference}
+
+\end{document}

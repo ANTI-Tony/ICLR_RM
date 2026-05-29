@@ -1,0 +1,22 @@
+# LaTeX build artifacts
+*.aux
+*.bbl
+*.blg
+*.log
+*.out
+*.toc
+*.synctex.gz
+*.fls
+*.fdb_latexmk
+*.nav
+*.snm
+*.vrb
+*.dvi
+
+# Editor cruft
+.DS_Store
+*.swp
+*~
+
+# Keep main.pdf out so Overleaf can rebuild fresh
+main.pdf
