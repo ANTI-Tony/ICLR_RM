@@ -130,7 +130,6 @@ consequence at the magnitude rational decision-making requires.}
 \label{fig:motivation}
 \end{figure}
 
-\paragraph{Do current thinking models already do this implicitly?}
 An intuitive defense of the difficulty-default would be that strong
 reasoning models, even without an explicit cost signal, might allocate
 compute by consequence emergently. Figure~\ref{fig:motivation} reports
@@ -145,17 +144,15 @@ $p = 0.008$, $n = 171$; high-consequence tasks receive only $17\%$
 more thinking than low-consequence ones---an order of magnitude below
 what Equation~\eqref{eq:objective} would prescribe).
 
-\paragraph{Our proposal.} We propose \emph{consequence-aware test-time
-compute allocation}. A lightweight predictor estimates the
-deployment-time cost-of-error of each task directly from its issue
-text. A scheduler then routes higher-consequence tasks to larger
-compute tiers---or, equivalently, larger thinking budgets---under the
-same total compute budget as a difficulty-based baseline. No reasoning
-model is retrained; the intervention sits entirely at the scheduling
-layer.
+We propose \emph{consequence-aware test-time compute allocation}. A
+lightweight predictor estimates the deployment-time cost-of-error of
+each task directly from its issue text. A scheduler then routes
+higher-consequence tasks to larger compute tiers---or, equivalently,
+larger thinking budgets---under the same total compute budget as a
+difficulty-based baseline. No reasoning model is retrained; the
+intervention sits entirely at the scheduling layer.
 
-\paragraph{Contributions.} The remainder of the paper builds the
-empirical case in five steps.
+The remainder of the paper builds the empirical case in five steps.
 \begin{itemize}
 \item[(1)] \textbf{Consequence is statistically independent of
 difficulty, and is not a re-skinned confidence signal.} On 700
