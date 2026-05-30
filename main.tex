@@ -356,9 +356,30 @@ inadequate} for deployment.
 Across the three models we audit---one with random spending, one
 saturated, and one weakly-but-inadequately leaning---none allocates
 compute by consequence at the magnitude rational decision-making
-requires. The question that motivates the rest of the paper is
-therefore not ``does the model already do this?'' but ``how should a
-deployer wrap a reasoning model so that it does?''
+requires (Table~\ref{tab:audit}). The question that motivates the rest
+of the paper is therefore not ``does the model already do this?'' but
+``how should a deployer wrap a reasoning model so that it does?''
+
+\begin{table}[h]
+\centering
+\caption{\textbf{Model audit on SWE-bench Lite.} None of the three
+audited reasoning models scales thinking length with consequence at
+the magnitude that Eq.~\ref{eq:objective} prescribes. Reported
+quantities: sample size $n$, configured token budget $\mathrm{max\_new}$,
+Spearman rank correlation between thinking length and consequence,
+and the resulting failure mode.}
+\label{tab:audit}
+\small
+\begin{tabular}{lrrcccl}
+\toprule
+Model & $n$ & $\mathrm{max\_new}$ & $\rho(\text{thinking}, \text{cons})$ & $p$ & High vs Low & Failure mode \\
+\midrule
+Qwen3-8B (hybrid)         & $50$  & $4{,}096$  & $+0.002$ & n.s.     & ---     & no signal \\
+Qwen3-VL-8B-Thinking      & $50$  & $8{,}192$  & ---      & ---      & ---     & $99.3\%$ saturated \\
+Claude Sonnet~4.5 (ext.~thinking) & $171$ & $16{,}000$ & $+0.203$ & $0.008$ & $+20.5\%$ & emergent but inadequate \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \section{Predicting Consequence at Deployment Time}
 \label{sec:pred}
@@ -397,8 +418,32 @@ class~0} (severe under-allocation rate $= 0/44 = 0\%$). The
 cross-model Claude predictor matches this safety property
 (class-2$\,\to\,$class-0 $= 0/44$) while having lower aggregate
 recall, suggesting that the zero-severe-error property is rubric- and
-text-driven rather than model-specific. Full per-class metrics for
-both predictors are reported in Appendix~\ref{app:predictor}.
+text-driven rather than model-specific (Table~\ref{tab:predictor}).
+Full per-class metrics for both predictors are reported in
+Appendix~\ref{app:predictor}.
+
+\begin{table}[h]
+\centering
+\caption{\textbf{Predictor calibration vs.\ the LLM-with-patch
+reference} on 300 SWE-bench Lite tasks. The deployment-critical
+``never miss a high-consequence task as low'' property
+(Class-2$\,\to\,$Class-0 $= 0/44$) holds for both predictors,
+even though the cross-model variant has substantially lower
+aggregate $\kappa$ and class-2 recall---suggesting the safety property
+is text- and rubric-driven, not model-specific.}
+\label{tab:predictor}
+\small
+\begin{tabular}{lcccccc}
+\toprule
+Predictor & $\kappa$ & Class-2 recall & 2$\to$0 & 2$\to$1 & Severe (0$\leftrightarrow$2) \\
+\midrule
+Qwen3-8B issue-only \emph{(within-model, primary)}
+   & $\mathbf{0.572}$ & $\mathbf{88.6\%}$ \,($39/44$) & $\mathbf{0/44}$ & $5/44$  & $0.7\%$ \\
+Claude Sonnet~4.5 issue-only \emph{(cross-model)}
+   & $0.379$          & $52.3\%$ \,($23/44$)          & $\mathbf{0/44}$ & $21/44$ & $0.7\%$ \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 This pattern---imperfect but safety-respecting---is what makes the
 predictor deployable. Even when the predictor is wrong, it almost
@@ -596,13 +641,43 @@ both,
 \[
 \rho\bigl(\,\mathrm{cons},\, Y \,\big|\, \mathrm{diff},\, \mathrm{passvar}\,\bigr) = +0.696,\quad p < 10^{-43}.
 \]
-A hierarchical regression on $Y$ confirms the gap:
-$R^2_{\mathrm{diff}+\mathrm{passvar}} = 0.183$, whereas
-$R^2_{\mathrm{diff}+\mathrm{passvar}+\mathrm{cons}} = 0.447$. Adding
+A hierarchical regression on $Y$ confirms the gap
+(Table~\ref{tab:r2decomp}):
+$R^2_{\mathrm{diff}+\mathrm{passvar}} = 0.474$, whereas
+$R^2_{\mathrm{diff}+\mathrm{passvar}+\mathrm{cons}} = 0.738$. Adding
 consequence on top of difficulty and confidence yields
-$\Delta R^2 = 26.4$ percentage points ($+55.7\%$ relative). The
-$30\%{+}$ deployment gain in Table~\ref{tab:main} is not produced by
-recovering a confidence signal in disguise.
+$\Delta R^2 = 26.4$ percentage points ($+55.7\%$ relative). Notably,
+difficulty alone contributes essentially no incremental variance once
+confidence is in the model
+($R^2_{\mathrm{diff}+\mathrm{passvar}} - R^2_{\mathrm{passvar}} = 0.0004$),
+so the $30\%{+}$ deployment gain in Table~\ref{tab:main} is not
+produced by recovering a difficulty or confidence signal in disguise.
+
+\begin{table}[h]
+\centering
+\caption{\textbf{R\textsuperscript{2} decomposition on the
+cost-weighted marginal value $Y$.} Difficulty alone explains $28\%$ of
+variance and pass-rate variance (the standard confidence proxy)
+explains $47\%$. Adding consequence on top of both lifts $R^2$ from
+$0.474$ to $0.738$, an absolute gain of $26.4$ percentage points
+($+55.7\%$ relative). Difficulty contributes essentially zero variance
+once confidence is already in the model.}
+\label{tab:r2decomp}
+\small
+\begin{tabular}{lc}
+\toprule
+Predictors in linear regression on $Y = \mathrm{cons}\cdot\Delta\mathrm{success}$ & $R^{2}$ \\
+\midrule
+Difficulty only                                       & $0.281$ \\
+Pass-variance only (confidence proxy)                 & $0.474$ \\
+Consequence only                                      & $0.350$ \\
+Difficulty + Pass-variance                            & $0.474$ \\
+Difficulty + Pass-variance + \textbf{Consequence}     & $\mathbf{0.738}$ \\
+\midrule
+$\Delta R^{2}$ from adding Consequence                & $\mathbf{+0.264}$ \;($+55.7\%$ relative) \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \subsection{Marginal utility: hardest tasks are unsolvable at any tier}
 \label{sec:marginal}
