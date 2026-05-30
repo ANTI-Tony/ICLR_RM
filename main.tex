@@ -418,7 +418,8 @@ class~0} (severe under-allocation rate $= 0/44 = 0\%$). The
 cross-model Claude predictor matches this safety property
 (class-2$\,\to\,$class-0 $= 0/44$) while having lower aggregate
 recall, suggesting that the zero-severe-error property is rubric- and
-text-driven rather than model-specific (Table~\ref{tab:predictor}).
+text-driven rather than model-specific (Table~\ref{tab:predictor};
+Figure~\ref{fig:confusion}).
 Full per-class metrics for both predictors are reported in
 Appendix~\ref{app:predictor}.
 
@@ -444,6 +445,20 @@ Claude Sonnet~4.5 issue-only \emph{(cross-model)}
 \bottomrule
 \end{tabular}
 \end{table}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.95\linewidth]{fig_confusion.pdf}
+\caption{\textbf{Predictor confusion matrices} against the
+LLM-with-patch reference on 300 SWE-bench Lite tasks. Rows: true
+class; columns: predicted class. The deployment-critical
+under-allocation cell (\emph{true class 2, predicted class 0}) is
+empty for both predictors, highlighted by the dashed red rectangle.
+The within-model Qwen predictor (left) has substantially higher
+class-2 recall ($39/44$) than the cross-model Claude predictor
+(right; $23/44$), but the safety property holds in both cases.}
+\label{fig:confusion}
+\end{figure}
 
 This pattern---imperfect but safety-respecting---is what makes the
 predictor deployable. Even when the predictor is wrong, it almost
@@ -589,8 +604,28 @@ Priority-aware (oracle; upper bound)                                  & $179.75$
 \end{tabular}
 \end{table}
 
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{fig_pareto.pdf}
+\caption{\textbf{Pareto curve: cost-weighted loss vs total compute}
+on the 16-model SWE-bench compute-tier benchmark. Each curve sweeps
+the fraction of tasks routed to the premium tier from $0$ to $100\%$.
+The Difficulty-aware curve (Snell-style) is flat across most of the
+range and is dominated by the Random baseline---additional premium
+compute spent on the hardest tasks does not reduce cost-weighted
+loss, because those tasks are unsolvable at any tier (see
+\S\ref{sec:marginal}). The Priority-aware variants Pareto-dominate
+all others, and the Qwen-predictor-driven version
+(\textbf{primary deployable variant}) tracks the oracle closely
+across the entire budget axis. The dotted vertical line marks the
+operating point used in Table~\ref{tab:main}.}
+\label{fig:pareto}
+\end{figure}
+
 \textbf{Consequence-aware allocation beats difficulty-aware by
-$30\%{+}$.} Table~\ref{tab:main} reports the main results. The
+$30\%{+}$.} Table~\ref{tab:main} reports the main results;
+Figure~\ref{fig:pareto} shows the corresponding Pareto curve across
+the full budget axis. The
 primary deployable variant---Priority-aware routing driven by the
 issue-only Qwen predictor---reduces cost-weighted loss by $30.7\%$
 relative to the difficulty-aware Snell-style baseline. Its oracle
@@ -718,10 +753,30 @@ $+21.8\%$-vs-$+30.7\%$ gap in Table~\ref{tab:main}.
 Together, (1)--(3) explain the negative result on difficulty-aware
 allocation: a cost-blind scheduler that spends more compute on harder
 tasks is spending its budget where extra compute has the lowest
-marginal return. Appendix~\ref{app:marginal} reports a per-task view
-that makes this concrete: the top-ranked tasks by priority all have
+marginal return. Figure~\ref{fig:marginal} visualizes the effect---
+$\Delta\mathrm{success}$ rises with difficulty up to the moderate
+range and then collapses on the unsolvable tail, producing the
+strongly negative Spearman correlation. Appendix~\ref{app:marginal}
+reports the per-task view: the top-ranked tasks by priority all have
 moderate difficulty and large $\Delta\mathrm{success}$, while the
 top-ranked tasks by difficulty all have $\Delta\mathrm{success} = 0$.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{fig_marginal.pdf}
+\caption{\textbf{Why difficulty-aware allocation fails: $\Delta$success
+collapses on the hardest tasks.} Each marker is one of the 300
+SWE-bench Lite tasks, colored by consequence class.
+$\Delta\mathrm{success} = p_{\mathrm{premium}}(x) - p_{\mathrm{cheap}}(x)$
+is the marginal accuracy gain from routing $x$ to the premium tier.
+The black trend line (binned mean) rises with difficulty up to the
+moderate range and then collapses on the unsolvable tail, producing
+the strongly negative Spearman correlation
+($\rho = -0.78$, $p < 10^{-60}$). A scheduler that allocates compute
+to the difficulty tail spends its budget where extra compute returns
+nothing.}
+\label{fig:marginal}
+\end{figure}
 
 \section{Discussion and Limitations}
 
