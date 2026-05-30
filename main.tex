@@ -335,8 +335,9 @@ their actual thinking length scales with the LLM-with-patch
 consequence label (Figure~\ref{fig:motivation}). The three models
 exemplify three distinct failure modes.
 
-\textbf{Qwen3-8B (hybrid thinking).} Qwen3-8B alternates between a
-``thinking'' and a ``direct'' mode by emitting a control token. On
+\textbf{Qwen3-8B (hybrid thinking).} Qwen3-8B~\citep{qwen2025qwen3}
+alternates between a ``thinking'' and a ``direct'' mode by emitting a
+control token. On
 $50$ SWE-bench Lite tasks at \texttt{max\_new\_tokens}$=4096$, the
 thinking-character count varies widely across tasks, but the rank
 correlation with consequence is
@@ -353,8 +354,9 @@ differentiation. The failure mode here is not random allocation but
 \emph{saturation}: the model wants to think for longer than the budget
 allows on essentially every task, regardless of its cost.
 
-\textbf{Claude Sonnet 4.5 with extended thinking.} We run Claude with
-an extended-thinking budget of $16{,}000$ tokens on $171$ stratified
+\textbf{Claude Sonnet 4.5 with extended thinking.} We run
+Claude~\citep{anthropic2025claude45} with an extended-thinking budget
+of $16{,}000$ tokens on $171$ stratified
 SWE-bench Lite tasks. Here we observe a statistically significant
 relationship between thinking length and consequence:
 $\rho = +0.203$, $p = 0.008$. The magnitude, however, is far below
