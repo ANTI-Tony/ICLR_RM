@@ -28,46 +28,51 @@ Paper under double-blind review}
 \maketitle
 
 \begin{abstract}
-Modern reasoning models---OpenAI's o-series, DeepSeek-R1, Claude with
-extended thinking, and Qwen3-Thinking---allocate test-time compute
-adaptively across tasks: tasks that look harder receive more thinking
-tokens, easier ones stop earlier. Recent work on adaptive test-time
-compute codifies this difficulty-based heuristic into learned routers
-and confidence-driven early-stopping policies. The implicit
-assumption underlying all of these methods is that compute buys
-accuracy, and that accuracy is fungible across tasks.
+% Modern reasoning models---OpenAI's o-series, DeepSeek-R1, Claude with
+% extended thinking, and Qwen3-Thinking---allocate test-time compute
+% adaptively across tasks: tasks that look harder receive more thinking
+% tokens, easier ones stop earlier. Recent work on adaptive test-time
+% compute codifies this difficulty-based heuristic into learned routers
+% and confidence-driven early-stopping policies. The implicit
+% assumption underlying all of these methods is that compute buys
+% accuracy, and that accuracy is fungible across tasks.
 
-This assumption breaks in real deployment. Behind a given accuracy,
-the ``remaining error'' carries wildly different costs across tasks:
-a typo in a log message and a database migration that silently
-corrupts a production table both count as a single unit of accuracy
-on a benchmark, but only one of them is worth additional compute to
-avoid. We argue that test-time compute should be allocated by
-expected cost-of-error, not by predicted difficulty.
+% This assumption breaks in real deployment. Behind a given accuracy,
+% the ``remaining error'' carries wildly different costs across tasks:
+% a typo in a log message and a database migration that silently
+% corrupts a production table both count as a single unit of accuracy
+% on a benchmark, but only one of them is worth additional compute to
+% avoid. We argue that test-time compute should be allocated by
+% expected cost-of-error, not by predicted difficulty.
 
-We propose \emph{consequence-aware} test-time compute allocation. At
-its core is a lightweight predictor that estimates the deployment-time
-cost-of-error of each task directly from its issue text; a scheduler
-then routes higher-consequence tasks to larger compute tiers---or
-larger thinking budgets---under the same total budget as a
-difficulty-based baseline.
+% We propose \emph{consequence-aware} test-time compute allocation. At
+% its core is a lightweight predictor that estimates the deployment-time
+% cost-of-error of each task directly from its issue text; a scheduler
+% then routes higher-consequence tasks to larger compute tiers---or
+% larger thinking budgets---under the same total budget as a
+% difficulty-based baseline.
 
-We evaluate on 700 software-engineering tasks (SWE-bench Lite and
-Multi-SWE-bench mini), labeled under three independent pipelines, and
-audit three contemporary thinking models. Across all labeling
-pipelines, consequence is statistically orthogonal to difficulty and
-remains a significant predictor of cost-weighted gain after
-controlling for difficulty and cross-model confidence. Current
-thinking models do not allocate compute by consequence: their spending
-is either uncorrelated with consequence, saturated at the token cap,
-or weakly leaning but far below the required magnitude. Our
-issue-only predictor never misclassifies a high-consequence task as
-low-consequence in 300 SWE-bench tasks. Under matched compute budgets,
-consequence-aware routing reduces cost-weighted loss by more than
-$30\%$ relative to difficulty-aware routing, and the predictor-driven
-variant retains over $90\%$ of the oracle gain. Notably,
-difficulty-aware routing performs worse than random because the
-hardest tasks are unsolvable at any tier.
+% We evaluate on 700 software-engineering tasks (SWE-bench Lite and
+% Multi-SWE-bench mini), labeled under three independent pipelines, and
+% audit three contemporary thinking models. Across all labeling
+% pipelines, consequence is statistically orthogonal to difficulty and
+% remains a significant predictor of cost-weighted gain after
+% controlling for difficulty and cross-model confidence. Current
+% thinking models do not allocate compute by consequence: their spending
+% is either uncorrelated with consequence, saturated at the token cap,
+% or weakly leaning but far below the required magnitude. Our
+% issue-only predictor never misclassifies a high-consequence task as
+% low-consequence in 300 SWE-bench tasks. Under matched compute budgets,
+% consequence-aware routing reduces cost-weighted loss by more than
+% $30\%$ relative to difficulty-aware routing, and the predictor-driven
+% variant retains over $90\%$ of the oracle gain. Notably,
+% difficulty-aware routing performs worse than random because the
+% hardest tasks are unsolvable at any tier.
+Modern reasoning models already enable the allocation of different amounts of compute at test time for different tasks. In response, existing adaptive test-time computation methods typically follow a difficulty heuristic, allocating more thinking tokens, model calls, or compute budgets to tasks predicted to be harder. However, this strategy implicitly assumes that errors across tasks can be treated homogeneously under a single accuracy objective—an assumption we argue does not hold for real-world deployment. After all, a typo in a log and a migration that corrupts a production database each count as a single failure in a benchmark, yet their real-world costs are completely different.
+To address this gap, this paper proposes consequence-aware test-time compute allocation, a new paradigm that allocates test-time compute according to the consequences of errors. Specifically, we use a lightweight predictor that estimates, solely from the issue text, the deployment cost a task would incur if it fails. Based on this prediction, the system routes high-consequence tasks to larger compute tiers or higher thinking budgets under the same total budget. We conduct main experiments on SWE-bench Lite and validate on Multi-SWE-bench mini, covering a total of 700 software engineering tasks.
+Our results reveal that consequence and difficulty are approximately orthogonal under various annotations, and that current thinking models do not allocate compute sufficiently according to consequence. Moreover, our issue-only predictor never misclassifies a high-consequence task as low-consequence across the 300 SWE-bench tasks. Under matched compute budgets, consequence-aware routing reduces cost-weighted loss by more than 30\% relative to difficulty-aware routing, while the predictor-driven variant retains over 90\% of the oracle gain. Notably, difficulty-aware routing performs worse than random, as the hardest tasks are unsolvable at any tier. Taken together, these findings suggest that test-time compute should focus not only on how hard a task is, but also on how expensive an error would be and whether extra compute is worth it.
+
+
 \end{abstract}
 
 \section{Introduction}
