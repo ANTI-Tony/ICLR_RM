@@ -147,7 +147,7 @@ thinking length is essentially uncorrelated with consequence
 ($\rho = 0.002$), Qwen3-VL-8B-Thinking pins $99.3\%$ of tasks at its
 8192-token cap, and Claude Sonnet 4.5 shows a statistically
 significant but quantitatively inadequate leaning ($\rho = 0.20$,
-$p = 0.008$, $n = 171$; high-consequence tasks receive only $17\%$
+$p = 0.008$, $n = 171$; high-consequence tasks receive only $20.5\%$
 more thinking than low-consequence ones---an order of magnitude below
 what Equation~\eqref{eq:objective} would prescribe).
 
@@ -361,12 +361,13 @@ SWE-bench Lite tasks. Here we observe a statistically significant
 relationship between thinking length and consequence:
 $\rho = +0.203$, $p = 0.008$. The magnitude, however, is far below
 what Equation~\eqref{eq:objective} would prescribe: averaged across
-the sample, high-consequence (class~2) tasks receive only $17\%$ more
-thinking than low-consequence (class~0) tasks, while the median
-high-consequence task has $\approx 5\times$ the marginal value of
-extra compute (\S\ref{sec:exp}). The frontier model exhibits a weak
-emergent leaning toward consequence-aware allocation, but it is
-\emph{quantitatively inadequate} for deployment.
+the sample, high-consequence (class~2) tasks receive only $20.5\%$
+more thinking than low-consequence (class~0) tasks ($6135$ versus
+$5090$ characters on average), while the median high-consequence task
+has $\approx 5\times$ the marginal value of extra compute
+(\S\ref{sec:exp}). The frontier model exhibits a weak emergent leaning
+toward consequence-aware allocation, but it is \emph{quantitatively
+inadequate} for deployment.
 
 Across the three models we audit---one with random spending, one
 saturated, and one weakly-but-inadequately leaning---none allocates
