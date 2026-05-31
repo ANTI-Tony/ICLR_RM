@@ -72,7 +72,7 @@ Paper under double-blind review}
 % hardest tasks are unsolvable at any tier.
 Modern reasoning models already enable the allocation of different amounts of compute at test time for different tasks. In response, existing adaptive test-time computation methods typically follow a difficulty heuristic, allocating more thinking tokens, model calls, or compute budgets to tasks predicted to be harder. However, this strategy implicitly assumes that errors across tasks can be treated homogeneously under a single accuracy objective—an assumption we argue does not hold for real-world deployment. After all, a typo in a log and a migration that corrupts a production database each count as a single failure in a benchmark, yet their real-world costs are completely different.
 To address this gap, this paper proposes consequence-aware test-time compute allocation, a new paradigm that allocates test-time compute according to the consequences of errors. Specifically, we use a lightweight predictor that estimates, solely from the issue text, the deployment cost a task would incur if it fails. Based on this prediction, the system routes high-consequence tasks to larger compute tiers or higher thinking budgets under the same total budget. We conduct main experiments on SWE-bench Lite and validate on Multi-SWE-bench mini, covering a total of 700 software engineering tasks.
-Our results reveal that consequence and difficulty are approximately orthogonal under various annotations, and that current thinking models do not allocate compute sufficiently according to consequence. Moreover, our issue-only predictor never misclassifies a high-consequence task as low-consequence across the 300 SWE-bench tasks. Under matched compute budgets, consequence-aware routing reduces cost-weighted loss by more than 30\% relative to difficulty-aware routing, while the predictor-driven variant retains over 90\% of the oracle gain. Notably, difficulty-aware routing performs worse than random, as the hardest tasks are unsolvable at any tier. Taken together, these findings suggest that test-time compute should focus not only on how hard a task is, but also on how expensive an error would be and whether extra compute is worth it.
+Our results reveal that consequence and difficulty are approximately orthogonal under various annotations, and that current thinking models do not allocate compute sufficiently according to consequence. Moreover, our issue-only predictor never misclassifies a high-consequence task as low-consequence across the 300 SWE-bench tasks. Under matched compute budgets, our consequence-aware scheduler reduces cost-weighted loss by 22\%–33\% relative to difficulty-aware routing; in particular, the priority-aware variant---which routes by per-task cost scaled by the marginal-utility signal---crosses 30\%, and its deployable predictor-driven version retains over 90\% of the oracle gain. Notably, difficulty-aware routing performs worse than random, as the hardest tasks are unsolvable at any tier. Taken together, these findings suggest that test-time compute should focus not only on how hard a task is, but also on how expensive an error would be and whether extra compute is worth it.
 
 
 \end{abstract}
@@ -189,10 +189,14 @@ the adjacent class, never across the safety gap
 (\S\ref{sec:pred}).
 
 \item[(4)] \textbf{Consequence-aware allocation reduces cost-weighted
-loss by over $30\%$ relative to difficulty-aware under matched total
-compute,} on a $16$-model SWE-bench compute-tier benchmark; the
-predictor-driven variant retains over $90\%$ of the oracle gain
-(\S\ref{sec:method}, \S\ref{sec:exp}).
+loss by $22\%{-}33\%$ relative to difficulty-aware under matched total
+compute, with the priority-aware variant} (which routes by
+$\mathrm{cons}(x)\cdot\Delta\mathrm{success}(x)$) \textbf{crossing
+$30\%$} on a $16$-model SWE-bench compute-tier benchmark. The
+deployable predictor-driven version of the priority-aware variant
+($+30.7\%$) retains over $90\%$ of its oracle gain ($+33.0\%$); the
+simpler consequence-only variant retains $93.6\%$ of its corresponding
+oracle (\S\ref{sec:method}, \S\ref{sec:exp}).
 
 \item[(5)] \textbf{Difficulty-aware allocation is in fact worse than
 random,} and we surface the root cause:
@@ -632,8 +636,9 @@ operating point used in Table~\ref{tab:main}.}
 \label{fig:pareto}
 \end{figure}
 
-\textbf{Consequence-aware allocation beats difficulty-aware by
-$30\%{+}$.} Table~\ref{tab:main} reports the main results;
+\textbf{The priority-aware consequence variant beats difficulty-aware
+by $30\%{+}$; the simpler consequence-only variant beats it by
+$22\%{+}$.} Table~\ref{tab:main} reports the main results;
 Figure~\ref{fig:pareto} shows the corresponding Pareto curve across
 the full budget axis. The
 primary deployable variant---Priority-aware routing driven by the
@@ -695,7 +700,7 @@ $\Delta R^2 = 26.4$ percentage points ($+55.7\%$ relative). Notably,
 difficulty alone contributes essentially no incremental variance once
 confidence is in the model
 ($R^2_{\mathrm{diff}+\mathrm{passvar}} - R^2_{\mathrm{passvar}} = 0.0004$),
-so the $30\%{+}$ deployment gain in Table~\ref{tab:main} is not
+so the $30\%{+}$ priority-aware gain in Table~\ref{tab:main} is not
 produced by recovering a difficulty or confidence signal in disguise.
 
 \begin{table}[h]
@@ -828,12 +833,13 @@ deployment objective is not accuracy but cost-weighted risk, and that
 the missing signal---per-task consequence---is independently
 measurable, distinct from difficulty and confidence, predictable from
 issue text alone, and safely usable as a routing input. On a
-16-model SWE-bench compute-tier benchmark, consequence-aware
-allocation reduces cost-weighted loss by $30\%{+}$ over a
-difficulty-aware baseline; a deployable predictor variant retains
-over $90\%$ of that gain; and the difficulty baseline itself
-underperforms random, because the hardest tasks are unsolvable at any
-tier. Reasoning models do not need to be retrained to benefit from
+16-model SWE-bench compute-tier benchmark, our consequence-aware
+scheduler reduces cost-weighted loss by $22\%{-}33\%$ over a
+difficulty-aware baseline, with the priority-aware variant crossing
+$30\%$; the deployable predictor-driven version of that variant
+retains over $90\%$ of its oracle gain; and the difficulty baseline
+itself underperforms random, because the hardest tasks are unsolvable
+at any tier. Reasoning models do not need to be retrained to benefit from
 this; the change is at the scheduling layer.
 
 \bibliography{references}
@@ -962,9 +968,10 @@ $\mathrm{cons}(x)$ used in computing the cost-weighted loss. The
 priority-aware oracle beats the difficulty-aware baseline by between
 $+30.8\%$ and $+36.3\%$ across all four labelings, with the human
 labels giving the largest improvement on the 75-task subset they
-cover. The paper's main claim (``a $30\%+$ reduction in cost-weighted
-loss'') is therefore not a property of the LLM-with-patch labeler
-specifically: it is a property of the rubric.
+cover. The paper's main claim (``the priority-aware variant achieves
+$30\%+$ reduction in cost-weighted loss'') is therefore not a
+property of the LLM-with-patch labeler specifically: it is a property
+of the rubric.
 
 \begin{table}[h]
 \centering
@@ -993,8 +1000,8 @@ Human majority \emph{(75 SWE tasks)}      & $\phantom{0}75$  & $\phantom{0}75.8$
 
 The fact that the rule-based labeler---which is just a hand-written
 lexical pattern matcher---and the human-majority labeler---which never
-sees an LLM---both yield $30\%+$ improvements rules out the
-``the gain is something the LLM judge invented'' interpretation. The
+sees an LLM---both yield $30\%+$ priority-aware improvements rules
+out the ``the gain is something the LLM judge invented'' interpretation. The
 remainder of the paper retains the LLM-with-patch label as the
 primary signal in the main results because it is the labeling under
 which all four supporting analyses
@@ -1109,8 +1116,8 @@ $\rho(\mathrm{consequence}, \mathrm{difficulty})$ stays close to zero,
 the issue-only predictor's $\kappa$ stays in the same range as the
 full-pool $0.572$, the deployment-critical $2{\to}0$ cell remains
 empty, and priority-aware oracle routing reduces cost-weighted loss by
-$30\%+$ over difficulty-aware routing at the matched-compute operating
-point.
+$30\%+$ (priority-aware variant) over difficulty-aware routing at
+the matched-compute operating point.
 
 \begin{table}[h]
 \centering
