@@ -297,8 +297,12 @@ $\rho_{\mathrm{rule}}{=}{+}0.047$ ($p{>}0.4$) and
 $\rho_{\mathrm{LLM\text{-}patch}}{=}{-}0.096$ ($p{>}0.09$). The result
 also replicates under a $150$-task human annotation study with three
 independent labelers ($\rho_{\mathrm{human}}{=}{-}0.066$,
-$p > 0.5$; see Appendix~\ref{app:iaa}), so the orthogonality is not
-an artefact of any single labeling pipeline. High-stakes tasks are
+$p > 0.5$; see Appendix~\ref{app:iaa}) and under the issue-only
+predictor of \S\ref{sec:pred} ($\rho = -0.109$, $p = 0.06$). All
+four labelings---rule, LLM-with-patch, LLM-issue-only, human
+majority---place the correlation within $\pm 0.11$ of zero, none
+significant (Appendix~\ref{app:rubric}). The orthogonality is not an
+artefact of any single labeling pipeline. High-stakes tasks are
 spread uniformly across the difficulty range: trivial typos can have
 high consequence (security-critical log redaction), and extremely hard
 tasks can have low consequence (an obscure parser edge case). This is
@@ -1002,6 +1006,89 @@ $\rho = -0.066$. We therefore retain the LLM-with-patch label as the
 primary consequence signal throughout the main text while presenting
 the human evidence here as a transparency check on its construct
 validity.
+
+\section{Rubric Ablation: All Four Labelings Give the Same Conclusion}
+\label{app:rubric}
+
+A natural reviewer concern is that the central results of the paper
+might be artefacts of the specific labeling pipeline used in the main
+text (LLM-with-patch). This appendix re-runs the two headline
+analyses---F1 orthogonality (\S\ref{sec:cons}) and the matched-compute
+allocation gain (\S\ref{sec:exp})---separately under each of the four
+labelings of the rubric, and shows the conclusions are stable.
+
+\textbf{F1 orthogonality replicates under every labeling.}
+Table~\ref{tab:abl-ortho} reports $\rho(\mathrm{consequence}, \mathrm{difficulty})$
+under the four labeling pipelines. None of the four correlations
+reaches significance at $\alpha = 0.05$, and all four are within
+$\pm 0.11$ of zero. The construct is statistically independent of
+difficulty regardless of who or what produces the label.
+
+\begin{table}[h]
+\centering
+\caption{\textbf{Rubric ablation — orthogonality.} Spearman
+$\rho(\mathrm{consequence}, \mathrm{difficulty})$ on SWE-bench Lite
+under each of the four labelings.}
+\label{tab:abl-ortho}
+\small
+\begin{tabular}{lccc}
+\toprule
+Labeling pipeline & $n$ & $\rho$ & $p$ \\
+\midrule
+Rule-based                                  & $300$ & $+0.047$ & $0.42$ \\
+LLM-with-patch  (Qwen3-8B; paper primary)   & $300$ & $-0.096$ & $0.10$ \\
+LLM-issue-only  (Qwen3-8B predictor)        & $300$ & $-0.109$ & $0.06$ \\
+Human majority  (3-annotator study)         & $\phantom{0}75$  & $-0.066$ & $0.57$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Allocation gain replicates under every labeling.}
+Table~\ref{tab:abl-gain} re-runs the matched-compute experiment of
+\S\ref{sec:exp} four times: in each row, the indicated labeling is
+substituted both as the oracle routing signal and as the weight
+$\mathrm{cons}(x)$ used in computing the cost-weighted loss. The
+priority-aware oracle beats the difficulty-aware baseline by between
+$+30.8\%$ and $+36.3\%$ across all four labelings, with the human
+labels giving the largest improvement on the 75-task subset they
+cover. The paper's main claim (``a $30\%+$ reduction in cost-weighted
+loss'') is therefore not a property of the LLM-with-patch labeler
+specifically: it is a property of the rubric.
+
+\begin{table}[h]
+\centering
+\caption{\textbf{Rubric ablation — allocation gain.} Cost-weighted loss
+$\mathcal{L}$ at the matched-compute operating point (top-$25\%$ to
+the premium tier) on the 16-model SWE-bench compute-tier benchmark,
+recomputed four times---once per labeling pipeline---using that
+labeling both as the oracle routing signal and as the consequence
+weight in $\mathcal{L}$. ``$\Delta$ vs Diff'' is the relative
+reduction in $\mathcal{L}$ achieved by the priority-aware oracle
+relative to the difficulty-aware (Snell-style) baseline within the
+same labeling.}
+\label{tab:abl-gain}
+\small
+\begin{tabular}{lrrrrrr}
+\toprule
+Oracle labeling & $n$ & Diff & Random & Cons-oracle & Priority-oracle & $\Delta$ vs Diff \\
+\midrule
+Rule-based                                & $300$ & $406.2$ & $352.5$ & $330.8$ & $\mathbf{281.2}$ & $+30.8\%$ \\
+LLM-with-patch \emph{(paper main)}        & $300$ & $268.2$ & $233.8$ & $205.8$ & $\mathbf{179.8}$ & $+33.0\%$ \\
+LLM-issue-only \emph{(predictor)}         & $300$ & $307.5$ & $266.2$ & $229.5$ & $\mathbf{201.5}$ & $+34.5\%$ \\
+Human majority \emph{(75 SWE tasks)}      & $\phantom{0}75$  & $\phantom{0}75.8$  & $\phantom{0}67.5$  & $\phantom{0}55.2$  & $\phantom{00}\mathbf{48.2}$  & $+36.3\%$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The fact that the rule-based labeler---which is just a hand-written
+lexical pattern matcher---and the human-majority labeler---which never
+sees an LLM---both yield $30\%+$ improvements rules out the
+``the gain is something the LLM judge invented'' interpretation. The
+remainder of the paper retains the LLM-with-patch label as the
+primary signal in the main results because it is the labeling under
+which all four supporting analyses
+(\S\ref{sec:cons}, \S\ref{sec:pred}, \S\ref{sec:exp}, \S\ref{sec:whyfail})
+are jointly applicable on the full 300-task pool.
 
 \section{Predictor Calibration Details}
 \label{app:predictor}
