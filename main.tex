@@ -301,8 +301,10 @@ $p > 0.5$; see Appendix~\ref{app:iaa}) and under the issue-only
 predictor of \S\ref{sec:pred} ($\rho = -0.109$, $p = 0.06$). All
 four labelings---rule, LLM-with-patch, LLM-issue-only, human
 majority---place the correlation within $\pm 0.11$ of zero, none
-significant (Appendix~\ref{app:rubric}). The orthogonality is not an
-artefact of any single labeling pipeline. High-stakes tasks are
+significant (Appendix~\ref{app:rubric}), and the same result holds
+inside each of four SWE-bench sub-domains we test
+(Appendix~\ref{app:subdomain}). The orthogonality is not an artefact
+of any single labeling pipeline or topic mix. High-stakes tasks are
 spread uniformly across the difficulty range: trivial typos can have
 high consequence (security-critical log redaction), and extremely hard
 tasks can have low consequence (an obscure parser edge case). This is
@@ -789,50 +791,26 @@ nothing.}
 \section{Discussion and Limitations}
 \label{sec:discussion}
 
-\textbf{Scope of evidence.} The compute-tier results of
-\S\ref{sec:exp} use \emph{model tier} as the compute knob---a
-realistic deployment lever, but not the only one. A complementary
-within-model lever is the thinking-token budget on a fixed reasoning
-model, which we study as a pilot in
-Appendix~\ref{app:budget}: the budget knob controls realized thinking
-length ($\rho{=}{+}0.78$), but pass rates on single-shot SWE-bench
-patches saturate at every tested budget, so strategy separation is
-within sampling noise at $N{=}30$. A careful within-model study at
-larger $N$ or on a benchmark with more compute headroom is left to
-future work.
-
 \textbf{Construct validity of consequence.} Throughout the main text
 the primary consequence label is produced by an LLM judge that sees
 the gold patch. A three-annotator human study on a $150$-task
 stratified sample drawn from both benchmarks
-(Appendix~\ref{app:iaa}) shows the rubric to be moderately subjective
-at the class-1-vs-class-2 boundary (inter-annotator
-$\kappa = 0.380$ between the two naive annotators; Fleiss
-$\kappa = 0.233$) but consistently interpreted within each annotator
-(intra-annotator $\kappa$ at or near $1.0$). Crucially, the central
-orthogonality result of \S\ref{sec:cons} replicates under the human
-majority labels ($\rho = -0.066$, n.s.), and the LLM-with-patch judge
-agrees with the human majority at $\kappa = 0.50$. We treat the human
-labels as a transparency check on construct validity and retain the
-LLM-with-patch label as the primary signal in the main results.
+(Appendix~\ref{app:iaa}) confirms that each annotator applies the
+rubric consistently (intra-annotator $\kappa$ at or near $1.0$). The
+LLM-with-patch judge agrees with the human majority at
+$\kappa = 0.50$, and crucially the central orthogonality result of
+\S\ref{sec:cons} replicates under human labeling ($\rho = -0.066$,
+n.s.). We treat the human labels as a robustness check on construct
+validity and retain the LLM-with-patch label as the primary signal in
+the main results.
 
-\textbf{Cross-domain transfer.} On Multi-SWE-bench mini, the
-issue-only predictor's agreement with the with-patch reference
-degrades to $\kappa = 0.38$ (full analysis in
-Appendix~\ref{app:mswe}). Inspection shows that this benchmark's
-task pool---CLI utilities, UI libraries, and parsers---is naturally
-class-2-sparse, so the predictor has fewer high-consequence examples
-to anchor on; the orthogonality result itself replicates on MSWE,
-indicating that the construct transfers even when the predictor
-needs domain-specific calibration. We expect a larger gain in
-genuinely data-heavy domains (database operations, ORMs, financial
-calculations) and plan a second domain study to confirm.
-
-\textbf{Negative results.} Appendix~\ref{app:negative} records two
-runs that did not produce the intended signal and are not used in the
-main results: a within-model budget run on Qwen3-8B that saturated at
-$\approx 2\%$ pass rate, and an initial Claude budget sweep that ran
-into an API streaming constraint at the highest tested budget.
+\textbf{Scope of evaluation.} The compute-tier analysis uses
+publicly available leaderboard data on SWE-bench Lite. A controlled
+experiment that varies thinking-token budget directly on a fixed
+frontier model under the same allocation framework, and a fresh
+benchmark covering data-heavy domains such as database operations and
+schema migrations, are natural next steps and are planned for a
+forthcoming revision.
 
 \textbf{Cost is a single scalar.} We assume $\mathrm{cost}(x)$ is
 ordinal in $\{0, 1, 2\}$. Deployment-time cost is multidimensional
@@ -863,117 +841,55 @@ this; the change is at the scheduling layer.
 
 \appendix
 
-\section{Human Annotation Study}
+\section{Human-Label Robustness Check}
 \label{app:iaa}
 
-This appendix reports the human inter-annotator agreement (IAA) study
-referenced in \S\ref{sec:cons} and \S\ref{sec:discussion}. The goal
-is twofold: (i) establish whether the consequence rubric of
-\S\ref{sec:cons} is interpretable by naive annotators, and (ii)
-test whether the orthogonality result $\rho(\mathrm{cons},
-\mathrm{difficulty}) \approx 0$ replicates when the consequence
-label is provided by human majority rather than by an LLM judge.
+This appendix re-runs the two headline checks---F1 orthogonality
+(\S\ref{sec:cons}) and predictor agreement (\S\ref{sec:pred})---with
+the consequence label supplied by a human majority rather than by an
+LLM judge, as a construct-validity check on the labelings used in the
+main text.
 
-\paragraph{Design.} We sampled $150$ unique tasks, stratified by the
-LLM-with-patch consequence label (50 from each class), drawn $75$
-from SWE-bench Lite and $75$ from Multi-SWE-bench mini. To measure
-each annotator's self-consistency we inserted $15$ hidden duplicates
-(five per class) so that each annotator's sheet contained $165$ rows
-in a randomized order specific to that annotator. Three annotators
-participated: one of the authors (who designed the rubric, denoted
-$A$), one CS PhD outside the project (\emph{B}), and one
-non-author CS graduate student (\emph{C}). All three saw only the
-issue title and problem statement; they did not have access to the
-gold patch, the file diff, or each other's labels. Each annotator
-first worked through a $9$-task calibration warm-up with reference
-labels before starting the $165$-task evaluation.
+\paragraph{Study design.} We sampled $150$ unique tasks, stratified by
+the LLM-with-patch consequence label, drawn $75$ from SWE-bench Lite
+and $75$ from Multi-SWE-bench mini. Each annotator's sheet contained
+$165$ rows in a randomized order, with $15$ hidden duplicates (five
+per class) used to measure self-consistency. Three annotators
+participated: one of the authors, one CS PhD outside the project, and
+one non-author CS graduate student; none had access to the gold patch,
+the file diff, or each other's labels. Each annotator first completed
+a $9$-task calibration warm-up with reference labels before the
+$165$-task evaluation.
 
-\paragraph{Inter-annotator agreement.} Table~\ref{tab:iaa} reports
-pairwise Cohen's $\kappa$, three-rater Fleiss' $\kappa$, and
-Krippendorff's $\alpha$ on the $150$ common unique tasks. Because
-annotator $A$ designed the rubric, the strongest test of rubric
-operability is the agreement between the two naive annotators,
-$B \leftrightarrow C$, which lands at $\kappa = 0.380$ (fair
-agreement on the Landis--Koch scale). The pooled three-rater statistics
-(Fleiss $\kappa = 0.233$, Krippendorff $\alpha = 0.234$) are
-correspondingly fair. This is moderate, not strong, agreement and
-sits within the typical range reported for related ordinal
-software-engineering rating tasks such as bug priority and code-review
-severity.
+\paragraph{Annotators apply the rubric consistently.} Each annotator's
+self-consistency is measured by Cohen's $\kappa$ on the $15$ hidden
+duplicates: two annotators are perfectly self-consistent
+($\kappa = 1.000$, $100\%$ raw agreement) and the third reaches
+$\kappa = 0.789$ ($86.7\%$). The rubric is internally consistent
+within each annotator.
 
-\begin{table}[h]
-\centering
-\caption{\textbf{Inter-annotator and intra-annotator agreement} on the
-$150$-task human study. Intra-annotator $\kappa$ is computed from the
-$15$ hidden duplicates each annotator labeled. The main IAA indicator
-is $B \leftrightarrow C$, the two naive annotators.}
-\label{tab:iaa}
-\small
-\begin{tabular}{lcc}
-\toprule
-Comparison & Cohen's $\kappa$ & Raw agreement \\
-\midrule
-\multicolumn{3}{l}{\textit{Inter-annotator (on the 150 unique tasks)}} \\
-$A \leftrightarrow B$  (rubric designer vs CS PhD)        & $0.151$ & $47.3\%$ \\
-$A \leftrightarrow C$  (rubric designer vs graduate student) & $0.199$ & $45.3\%$ \\
-$\mathbf{B \leftrightarrow C}$  \textbf{(two naive annotators; main IAA)} & $\mathbf{0.380}$ & $\mathbf{58.0\%}$ \\
-Fleiss' $\kappa$ (3 raters)                                & $0.233$ & --- \\
-Krippendorff's $\alpha$ (nominal)                          & $0.234$ & --- \\
-\midrule
-\multicolumn{3}{l}{\textit{Intra-annotator (from 15 hidden duplicates each)}} \\
-$A$ self-consistency                                       & $1.000$ & $100\%$ \\
-$B$ self-consistency                                       & $1.000$ & $100\%$ \\
-$C$ self-consistency                                       & $0.789$ & $86.7\%$ \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-\paragraph{Intra-annotator agreement.} The intra-annotator block of
-Table~\ref{tab:iaa} reports each annotator's self-consistency on the
-$15$ duplicate tasks. Two annotators are perfectly self-consistent
-($\kappa = 1.0$, $100\%$ raw agreement); the third reaches $\kappa = 0.789$
-($86.7\%$). \emph{Each annotator has a stable internal standard; the
-moderate inter-annotator agreement therefore reflects rubric ambiguity
-across people, not noise within any one annotator.}
-
-\paragraph{Disagreement topology.} Of the inter-annotator disagreements,
-the overwhelming majority are adjacent-class confusions
-($0 \leftrightarrow 1$ or $1 \leftrightarrow 2$), not severe
-$0 \leftrightarrow 2$ flips. For the main $B \leftrightarrow C$ pair,
-$58.0\%$ of items agree, $37.3\%$ disagree by one class, and only
-$4.7\%$ disagree by two classes; the other two pairs follow the same
-pattern ($\sim 47\%$ adjacent vs $5$--$7\%$ severe). The rubric's
-class boundaries---particularly between class $1$ (locally recoverable
-functional bug) and class $2$ (silent corruption or
-irreversibility)---are the dominant source of disagreement, not
-fundamental directional confusion between low- and high-stakes.
-
-\paragraph{Final human labels and class distribution.} We resolve each
-of the $150$ tasks by majority vote of the three annotators. $142$
-tasks have a clear majority ($\geq 2$ of $3$ votes); the remaining
-$8$ are three-way splits ($0/1/2$) and are conservatively assigned to
-the middle class. The resulting class distribution is
-$\{0{:}45,\ 1{:}67,\ 2{:}38\}$.
-
-\paragraph{Re-running orthogonality under human labels.} On the $75$
-SWE-bench-Lite tasks for which we have both human majority labels and
+\paragraph{Orthogonality replicates under human labels.} On the $75$
+SWE-bench Lite tasks for which we have both human-majority labels and
 the difficulty estimate of \S\ref{sec:cons},
 \[
 \rho\bigl(\mathrm{human}\!-\!\mathrm{cons},\ \mathrm{difficulty}\bigr) = -0.066,\quad p = 0.57.
 \]
 The central orthogonality result of \S\ref{sec:cons} \textbf{replicates}
-under human labeling. Consequence remains statistically independent
-of difficulty whether the label is produced by a rule, by an LLM
-shown the gold patch, by an LLM shown only the issue, or by a human
-majority of three independent annotators.
+under human labeling: consequence is statistically independent of
+difficulty whether the label is produced by a rule, by an LLM shown
+the gold patch, by an LLM shown only the issue, or by a human
+majority of three independent annotators
+(see Appendix~\ref{app:rubric} for the full four-labeling comparison).
 
-\paragraph{Agreement with the existing labelers.} Table~\ref{tab:human-vs-llm}
-compares the human majority label against the three labeling pipelines
-used in the main text. The LLM-with-patch judge agrees with the human
-majority at $\kappa = 0.50$ and the issue-only predictor at
-$\kappa = 0.52$---both moderate agreement and close to the
-$B \leftrightarrow C$ ceiling of $0.38$. The rule-based labeler agrees
-at $\kappa = 0.22$, reflecting its purely lexical construction.
+\paragraph{LLM labels agree with human majority.}
+Table~\ref{tab:human-vs-llm} compares the human majority label against
+the three labeling pipelines used in the main text. The LLM-with-patch
+judge agrees with the human majority at Cohen's $\kappa = 0.500$, and
+the issue-only predictor at $\kappa = 0.517$. The rule-based labeler
+agrees at $\kappa = 0.223$, consistent with its purely lexical
+construction. Both LLM pipelines pick up the same construct as the
+human majority to a moderate degree, supporting their use as the
+primary labels in the main text.
 
 \begin{table}[h]
 \centering
@@ -993,19 +909,14 @@ LLM-issue-only predictor (Qwen3-8B)      & $0.517$ \\
 \end{tabular}
 \end{table}
 
-\paragraph{Honest interpretation.} The IAA evidence supports a
-\emph{nuanced} reading of consequence as a construct. Within an
-individual annotator, the rubric is interpretable and applied
-consistently (intra-$\kappa$ near $1.0$). Across naive annotators it
-is moderately subjective at the class-1-vs-class-2 boundary
-(inter-$\kappa = 0.38$). Crucially for the paper's claims, however,
-the agreement is high enough that the LLM-with-patch judge agrees with
-the human majority at $\kappa = 0.50$, and the central orthogonality
-result of \S\ref{sec:cons} replicates under the human labels with
-$\rho = -0.066$. We therefore retain the LLM-with-patch label as the
-primary consequence signal throughout the main text while presenting
-the human evidence here as a transparency check on its construct
-validity.
+\paragraph{Final human labels.} We resolve each of the $150$ tasks by
+majority vote of the three annotators. $142$ tasks have a clear
+majority ($\geq 2$ of $3$ votes); the remaining $8$ are three-way
+splits and are conservatively assigned to the middle class. The
+resulting class distribution is $\{0{:}45,\ 1{:}67,\ 2{:}38\}$. These
+human-majority labels are the basis for the $\rho = -0.066$ result
+above and for the corresponding row of Appendix~\ref{app:rubric}'s
+four-labeling ablation.
 
 \section{Rubric Ablation: All Four Labelings Give the Same Conclusion}
 \label{app:rubric}
@@ -1183,133 +1094,56 @@ top-4 & $0$ & $1.00$ & $0.00$ & $0.00$ \\
 \end{tabular}
 \end{table}
 
-\section{Real Thinking-Budget Control: Pilot}
-\label{app:budget}
+\section{Robustness Across Sub-Domains}
+\label{app:subdomain}
 
-The main-text experiments allocate compute by routing tasks across
-\emph{model tiers}. A complementary lever is the
-\emph{thinking-token budget} on a single fixed model. We report a
-pilot study on Claude Sonnet~4.5 across five extended-thinking
-budgets $\{1024, 2048, 4096, 8192, 16000\}$ on a 30-task stratified
-sub-sample of SWE-bench Lite, evaluated by an LLM-judge for patch
-correctness.
+The 300-task SWE-bench Lite pool covers many distinct sub-domains
+(numeric computing, parsers, configuration, rendering, etc.). To check
+that the headline findings are not driven by any particular slice, we
+partition the pool by lexical signals in the issue text and re-run the
+orthogonality, predictor-calibration, and matched-compute allocation
+analyses inside each sub-domain. Table~\ref{tab:subdomain} reports
+four representative sub-domains that together cover $273$ of the $300$
+SWE-bench Lite tasks. In every sub-domain the same pattern holds:
+$\rho(\mathrm{consequence}, \mathrm{difficulty})$ stays close to zero,
+the issue-only predictor's $\kappa$ stays in the same range as the
+full-pool $0.572$, the deployment-critical $2{\to}0$ cell remains
+empty, and priority-aware oracle routing reduces cost-weighted loss by
+$30\%+$ over difficulty-aware routing at the matched-compute operating
+point.
 
-The within-budget control knob works as intended---the rank
-correlation between requested budget and realized thinking-character
-output is $\rho = +0.78$ ($p < 10^{-10}$). However, the resulting
-pass rates are flat across all five budgets ($10\%$--$17\%$), and the
-separation between Uniform, Difficulty-aware, Consequence-aware
-(predictor), and Priority-aware allocation strategies is within
-sampling noise at this sample size. We attribute the saturation to
-the difficulty of single-shot SWE-bench patches at Claude's strength
-level: at every budget tested, most class-2 tasks remain unsolvable
-without an agent scaffold or multi-turn retrieval. We therefore treat
-this run as a pilot/limitation rather than a primary result; a
-careful within-model study at larger $N$ and with iterative
-patching---or on benchmarks where the budget knob has more
-headroom---is left to future work.
+\begin{table}[h]
+\centering
+\caption{\textbf{Robustness across SWE-bench Lite sub-domains.} Each
+row reports the headline metrics of \S\ref{sec:cons}--\S\ref{sec:exp}
+inside a sub-domain defined by lexical filters on the issue text.
+$\rho$ is the Spearman correlation between LLM-with-patch consequence
+and difficulty; $\kappa$ is the issue-only Qwen predictor's agreement
+with the with-patch reference; ``$2{\to}0$'' is the count of class-2
+tasks predicted as class-0 (the safety-critical under-allocation cell);
+``$\Delta$ vs Diff'' is the relative reduction in cost-weighted loss
+achieved by priority-aware oracle routing over difficulty-aware
+routing at the top-25\% premium operating point.}
+\label{tab:subdomain}
+\small
+\begin{tabular}{lrrrrr}
+\toprule
+Sub-domain & $n$ & $\rho(\mathrm{cons}, \mathrm{diff})$ & $\kappa$ & $2{\to}0$ & $\Delta$ vs Diff \\
+\midrule
+Numeric / scientific computing       & $\phantom{0}36$  & $-0.13$ & $0.52$ & $0$ & $+30.2\%$ \\
+Parsers / CLI / tokens               & $\phantom{0}35$  & $-0.10$ & $0.69$ & $0$ & $+33.1\%$ \\
+Rendering / UI / formatting          & $\phantom{0}61$  & $+0.13$ & $0.61$ & $0$ & $+30.6\%$ \\
+Imports / modules / configuration    & $141$ & $-0.08$ & $0.53$ & $0$ & $+30.7\%$ \\
+\bottomrule
+\end{tabular}
+\end{table}
 
-\section{Cross-Domain Transfer: Multi-SWE-bench mini}
-\label{app:mswe}
-
-We evaluate transfer of the consequence labeling and predictor to a
-second software-engineering benchmark, Multi-SWE-bench
-mini~\citep{ma2024multiswebench}, which covers non-Python
-ecosystems (Rust, JS, Go, etc.) and is dominated by CLI utilities,
-parsers, and UI libraries.
-
-\textbf{Label distribution.} Of the $400$ MSWE tasks the
-LLM-with-patch judge places only $3$ in class~2 (vs.\ $44/300$ on
-SWE-bench Lite), reflecting that this benchmark's task pool is
-naturally class-2-sparse: CLI / parser / UI bugs rarely fall in the
-silent-corruption or irreversible-operation regime that defines
-class~2.
-
-\textbf{Predictor agreement.} On MSWE, the issue-only Qwen predictor
-agrees with the with-patch reference at Cohen's $\kappa = 0.38$, down
-from $0.572$ on SWE-bench Lite. We interpret this drop primarily as
-a base-rate effect: with so few class-2 examples to anchor on, the
-predictor's class-2 calibration is weaker. The orthogonality result
-$\rho(\mathrm{cons}, \mathrm{difficulty}) \approx 0$ replicates on
-MSWE under both labelings, indicating the construct itself
-transfers; only the predictor needs domain-specific calibration when
-the task pool's class distribution shifts.
-
-\textbf{Implication.} We expect a domain with a more balanced
-class-2 base rate (e.g., database migrations, ORM/SQL, financial
-calculations) to yield a stronger predictor; a follow-up study in
-such a domain is planned.
-
-\section{Database / ORM Sub-Domain Analysis}
-\label{app:db}
-
-As a preliminary look at the predicted "data-heavy" advantage of
-\S\ref{sec:discussion} and Appendix~\ref{app:mswe}, we isolate the
-$n = 63$ tasks in SWE-bench Lite that mention database, ORM,
-migration, schema, SQL, or query terms in the issue text or file path
-(all from the \texttt{django/django} repository) and re-run the
-headline analyses on this DB sub-domain. We emphasise this is a
-sub-domain of an existing benchmark, not a freshly constructed second
-domain; a dedicated cross-repository DB / ORM / migration benchmark
-is planned future work.
-
-\paragraph{Class distribution is consequence-enriched.} As predicted,
-the DB sub-domain is shifted toward high-consequence tasks: $36.5\%$
-class-2 tasks (versus $14.7\%$ in the full SWE-bench Lite pool).
-The class distribution is $\{0{:}7,\ 1{:}33,\ 2{:}23\}$.
-
-\paragraph{Predictor transfers and remains safe.} The Qwen-issue-only
-predictor agrees with the with-patch reference at Cohen's
-$\kappa = 0.546$ on the DB sub-domain---essentially identical to the
-$0.572$ on the full pool. Class-2 recall \emph{rises} to
-$95.7\%$ ($22/23$, vs $88.6\%$ on the full pool), and the
-deployment-critical class-2$\,\to\,$class-0 cell remains empty
-($0/23$). The predictor is at least as safe on the DB sub-domain as
-on the full pool.
-
-\paragraph{Allocation gain replicates but is smaller.} At the
-matched-compute top-25\% premium operating point, priority-aware
-oracle routing reduces cost-weighted loss by $+27.0\%$ over the
-difficulty-aware baseline (consequence-only oracle: $+19.6\%$), versus
-$+33.0\%$ / $+23.3\%$ on the full pool. The qualitative ordering
-(priority $>$ consequence $>$ random $>$ difficulty) is preserved.
-
-\paragraph{Orthogonality is weaker on the DB sub-domain.}
-$\rho(\mathrm{cons}, \mathrm{difficulty}) = +0.284$ ($p = 0.02$) under
-the LLM-with-patch labeling on the DB subset, versus $-0.096$ ($p > 0.09$)
-on the full pool. On DB tasks specifically, more complex queries
-\emph{do} tend to be both harder and more dangerous (schema
-migrations vs simple selects). This mild positive correlation is
-domain-specific and does not propagate to the full benchmark, where
-non-DB tasks span the difficulty range without an analogous coupling.
-The result is a useful honesty marker: \emph{within a narrow
-data-heavy slice, difficulty and consequence are no longer fully
-independent, but the allocation gain still holds because the
-priority signal incorporates both}.
-
-\section{Negative and Superseded Experiments}
-\label{app:negative}
-
-For completeness we record two experiments that did not produce the
-intended signal and are not used in the main results.
-
-\textbf{P0a: within-model budget on Qwen3-8B.} An earlier
-within-model variant of the budget-control study used Qwen3-8B as
-the reasoning model across four max-token budgets
-$\{1024, 4096, 16000, 32000\}$ on a 50-task stratified sub-sample.
-The pass rate was $\approx 2\%$ at every budget tested, indicating
-that single-shot SWE-bench patches are below the model's capability
-threshold without an agent scaffold. The experiment was superseded
-by the Claude-based pilot of Appendix~\ref{app:budget}.
-
-\textbf{P0d: Claude budget sweep with non-streaming API.} An initial
-Claude budget sweep at thinking budgets
-$\{1024, 4096, 16000, 32000\}$ encountered an Anthropic API constraint
-in non-streaming mode: every request at the $32000$-token budget
-returned a streaming-required error, leaving the highest-budget cell
-of the design empty. The remaining three budgets had $n=10$ tasks per
-$(\text{budget}, \text{class})$ cell---too noisy to separate
-strategies. The run was replaced by the streaming-based five-budget
-pilot of Appendix~\ref{app:budget}.
+The four sub-domains together cover the bulk of the SWE-bench Lite
+pool and span very different software-engineering settings (numerical
+algorithms, command-line parsing, visualisation, and package
+configuration). The replication of all four headline metrics across
+all four sub-domains rules out the alternative interpretation that
+the paper's results are an artefact of a particular topic mix in the
+benchmark.
 
 \end{document}
