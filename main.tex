@@ -439,9 +439,9 @@ is text- and rubric-driven, not model-specific.}
 Predictor & $\kappa$ & Class-2 recall & 2$\to$0 & 2$\to$1 & Severe (0$\leftrightarrow$2) \\
 \midrule
 Qwen3-8B issue-only \emph{(within-model, primary)}
-   & $\mathbf{0.572}$ & $\mathbf{88.6\%}$ \,($39/44$) & $\mathbf{0/44}$ & $5/44$  & $0.7\%$ \\
+   & $\mathbf{0.572}$ & $\mathbf{88.6\%}$ \,($39/44$) & $\mathbf{0/44}$ & $5/44$  & $\mathbf{0.0\%}$ \,($0/300$) \\
 Claude Sonnet~4.5 issue-only \emph{(cross-model)}
-   & $0.379$          & $52.3\%$ \,($23/44$)          & $\mathbf{0/44}$ & $21/44$ & $0.7\%$ \\
+   & $0.379$          & $52.3\%$ \,($23/44$)          & $\mathbf{0/44}$ & $21/44$ & $0.7\%$ \,($2/300$) \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -864,16 +864,18 @@ matrix is:
 \[
 \begin{array}{c|ccc|c}
 & \hat{c}{=}0 & \hat{c}{=}1 & \hat{c}{=}2 & \text{total} \\\hline
-c{=}0 & 39 & 21 & 0 & 60 \\
-c{=}1 & 18 & 165 & 13 & 196 \\
-c{=}2 & 0 & 5 & 39 & 44 \\\hline
-\text{total} & 57 & 191 & 52 & 300
+c{=}0 & 47  & 13  & 0  & 60  \\
+c{=}1 & 11  & 140 & 45 & 196 \\
+c{=}2 & 0   & 5   & 39 & 44  \\\hline
+\text{total} & 58 & 158 & 84 & 300
 \end{array}
 \]
-Per-class precision/recall/F1: class~0 ($0.68/0.65/0.66$), class~1
-($0.86/0.84/0.85$), class~2 ($0.75/0.89/0.81$). The critical safety
-property---no class~2 task predicted as class~0---is satisfied by
-construction (off-diagonal entry $[2,0] = 0$).
+Per-class precision/recall/F1: class~0 ($0.81/0.78/0.80$), class~1
+($0.89/0.71/0.79$), class~2 ($0.46/0.89/0.61$). The Qwen predictor
+hits zero severe errors in \emph{both} directions: $[2,0]=0$
+(no high-stakes task missed as low-stakes) and $[0,2]=0$
+(no low-stakes task escalated to high-stakes), giving an overall
+severe-error rate of $0/300 = 0.0\%$.
 
 \textbf{Cross-model robustness predictor: Claude Sonnet~4.5
 issue-only.} Cohen's $\kappa = 0.379$; class-2 recall $= 52.3\%$
@@ -890,11 +892,9 @@ c{=}2 & 0 & 21 & 23 & 44 \\\hline
 Per-class precision/recall/F1: class~0 ($0.57/0.55/0.56$), class~1
 ($0.76/0.76/0.76$), class~2 ($0.48/0.52/0.50$). Despite a noticeably
 lower aggregate $\kappa$ than the within-model predictor, the
-zero-severe-error property persists (off-diagonal entry $[2,0] = 0$).
-Across all $300$ tasks, severe disagreements ($0{\leftrightarrow}2$
-in either direction) total $0.7\%$ ($2/300$), supporting the
-deployment-safety claim independently of which predictor backbone is
-used.
+class-2$\to$class-0 cell still holds at zero, and total severe
+errors in \emph{either} direction sum to $2/300 = 0.7\%$, supporting
+the deployment-safety claim across model families.
 
 \section{Per-Task Marginal Utility (Excerpt)}
 \label{app:marginal}
