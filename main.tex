@@ -1240,6 +1240,53 @@ class-2 base rate (e.g., database migrations, ORM/SQL, financial
 calculations) to yield a stronger predictor; a follow-up study in
 such a domain is planned.
 
+\section{Database / ORM Sub-Domain Analysis}
+\label{app:db}
+
+As a preliminary look at the predicted "data-heavy" advantage of
+\S\ref{sec:discussion} and Appendix~\ref{app:mswe}, we isolate the
+$n = 63$ tasks in SWE-bench Lite that mention database, ORM,
+migration, schema, SQL, or query terms in the issue text or file path
+(all from the \texttt{django/django} repository) and re-run the
+headline analyses on this DB sub-domain. We emphasise this is a
+sub-domain of an existing benchmark, not a freshly constructed second
+domain; a dedicated cross-repository DB / ORM / migration benchmark
+is planned future work.
+
+\paragraph{Class distribution is consequence-enriched.} As predicted,
+the DB sub-domain is shifted toward high-consequence tasks: $36.5\%$
+class-2 tasks (versus $14.7\%$ in the full SWE-bench Lite pool).
+The class distribution is $\{0{:}7,\ 1{:}33,\ 2{:}23\}$.
+
+\paragraph{Predictor transfers and remains safe.} The Qwen-issue-only
+predictor agrees with the with-patch reference at Cohen's
+$\kappa = 0.546$ on the DB sub-domain---essentially identical to the
+$0.572$ on the full pool. Class-2 recall \emph{rises} to
+$95.7\%$ ($22/23$, vs $88.6\%$ on the full pool), and the
+deployment-critical class-2$\,\to\,$class-0 cell remains empty
+($0/23$). The predictor is at least as safe on the DB sub-domain as
+on the full pool.
+
+\paragraph{Allocation gain replicates but is smaller.} At the
+matched-compute top-25\% premium operating point, priority-aware
+oracle routing reduces cost-weighted loss by $+27.0\%$ over the
+difficulty-aware baseline (consequence-only oracle: $+19.6\%$), versus
+$+33.0\%$ / $+23.3\%$ on the full pool. The qualitative ordering
+(priority $>$ consequence $>$ random $>$ difficulty) is preserved.
+
+\paragraph{Orthogonality is weaker on the DB sub-domain.}
+$\rho(\mathrm{cons}, \mathrm{difficulty}) = +0.284$ ($p = 0.02$) under
+the LLM-with-patch labeling on the DB subset, versus $-0.096$ ($p > 0.09$)
+on the full pool. On DB tasks specifically, more complex queries
+\emph{do} tend to be both harder and more dangerous (schema
+migrations vs simple selects). This mild positive correlation is
+domain-specific and does not propagate to the full benchmark, where
+non-DB tasks span the difficulty range without an analogous coupling.
+The result is a useful honesty marker: \emph{within a narrow
+data-heavy slice, difficulty and consequence are no longer fully
+independent, but the allocation gain still holds because the
+priority signal incorporates both}.
+
 \section{Negative and Superseded Experiments}
 \label{app:negative}
 
