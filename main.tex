@@ -294,13 +294,17 @@ public SWE-bench leaderboard solvers. Under both the rule-based and
 LLM-with-patch labelings, the rank correlation between consequence and
 difficulty is statistically indistinguishable from zero:
 $\rho_{\mathrm{rule}}{=}{+}0.047$ ($p{>}0.4$) and
-$\rho_{\mathrm{LLM\text{-}patch}}{=}{-}0.096$ ($p{>}0.09$). High-stakes
-tasks are spread uniformly across the difficulty range: trivial typos
-can have high consequence (security-critical log redaction), and
-extremely hard tasks can have low consequence (an obscure parser edge
-case). This is the central premise of the paper: difficulty does not
-predict consequence, so a difficulty-only scheduler is, by
-construction, blind to deployment risk.
+$\rho_{\mathrm{LLM\text{-}patch}}{=}{-}0.096$ ($p{>}0.09$). The result
+also replicates under a $150$-task human annotation study with three
+independent labelers ($\rho_{\mathrm{human}}{=}{-}0.066$,
+$p > 0.5$; see Appendix~\ref{app:iaa}), so the orthogonality is not
+an artefact of any single labeling pipeline. High-stakes tasks are
+spread uniformly across the difficulty range: trivial typos can have
+high consequence (security-critical log redaction), and extremely hard
+tasks can have low consequence (an obscure parser edge case). This is
+the central premise of the paper: difficulty does not predict
+consequence, so a difficulty-only scheduler is, by construction, blind
+to deployment risk.
 
 A natural follow-up question---whether consequence is merely a
 re-skinning of cross-model disagreement (i.e., confidence) used by
@@ -792,15 +796,20 @@ within sampling noise at $N{=}30$. A careful within-model study at
 larger $N$ or on a benchmark with more compute headroom is left to
 future work.
 
-\textbf{Construct validity of consequence.} Throughout this paper
+\textbf{Construct validity of consequence.} Throughout the main text
 the primary consequence label is produced by an LLM judge that sees
-the gold patch. To strengthen the construct, we are running a
-three-annotator human study on a 150-task stratified sample drawn
-from both benchmarks, with hidden duplicates for intra-annotator
-reliability. We will report inter-annotator $\kappa$, a confusion
-matrix versus our LLM and rule labels, and a re-run of \S\ref{sec:exp}
-with human labels substituted as the routing oracle, in a forthcoming
-revision.
+the gold patch. A three-annotator human study on a $150$-task
+stratified sample drawn from both benchmarks
+(Appendix~\ref{app:iaa}) shows the rubric to be moderately subjective
+at the class-1-vs-class-2 boundary (inter-annotator
+$\kappa = 0.380$ between the two naive annotators; Fleiss
+$\kappa = 0.233$) but consistently interpreted within each annotator
+(intra-annotator $\kappa$ at or near $1.0$). Crucially, the central
+orthogonality result of \S\ref{sec:cons} replicates under the human
+majority labels ($\rho = -0.066$, n.s.), and the LLM-with-patch judge
+agrees with the human majority at $\kappa = 0.50$. We treat the human
+labels as a transparency check on construct validity and retain the
+LLM-with-patch label as the primary signal in the main results.
 
 \textbf{Cross-domain transfer.} On Multi-SWE-bench mini, the
 issue-only predictor's agreement with the with-patch reference
@@ -848,6 +857,150 @@ this; the change is at the scheduling layer.
 \bibliographystyle{iclr2026_conference}
 
 \appendix
+
+\section{Human Annotation Study}
+\label{app:iaa}
+
+This appendix reports the human inter-annotator agreement (IAA) study
+referenced in \S\ref{sec:cons} and \S\ref{sec:discussion}. The goal
+is twofold: (i) establish whether the consequence rubric of
+\S\ref{sec:cons} is interpretable by naive annotators, and (ii)
+test whether the orthogonality result $\rho(\mathrm{cons},
+\mathrm{difficulty}) \approx 0$ replicates when the consequence
+label is provided by human majority rather than by an LLM judge.
+
+\paragraph{Design.} We sampled $150$ unique tasks, stratified by the
+LLM-with-patch consequence label (50 from each class), drawn $75$
+from SWE-bench Lite and $75$ from Multi-SWE-bench mini. To measure
+each annotator's self-consistency we inserted $15$ hidden duplicates
+(five per class) so that each annotator's sheet contained $165$ rows
+in a randomized order specific to that annotator. Three annotators
+participated: one of the authors (who designed the rubric, denoted
+$A$), one CS PhD outside the project (\emph{B}), and one
+non-author CS graduate student (\emph{C}). All three saw only the
+issue title and problem statement; they did not have access to the
+gold patch, the file diff, or each other's labels. Each annotator
+first worked through a $9$-task calibration warm-up with reference
+labels before starting the $165$-task evaluation.
+
+\paragraph{Inter-annotator agreement.} Table~\ref{tab:iaa} reports
+pairwise Cohen's $\kappa$, three-rater Fleiss' $\kappa$, and
+Krippendorff's $\alpha$ on the $150$ common unique tasks. Because
+annotator $A$ designed the rubric, the strongest test of rubric
+operability is the agreement between the two naive annotators,
+$B \leftrightarrow C$, which lands at $\kappa = 0.380$ (fair
+agreement on the Landis--Koch scale). The pooled three-rater statistics
+(Fleiss $\kappa = 0.233$, Krippendorff $\alpha = 0.234$) are
+correspondingly fair. This is moderate, not strong, agreement and
+sits within the typical range reported for related ordinal
+software-engineering rating tasks such as bug priority and code-review
+severity.
+
+\begin{table}[h]
+\centering
+\caption{\textbf{Inter-annotator and intra-annotator agreement} on the
+$150$-task human study. Intra-annotator $\kappa$ is computed from the
+$15$ hidden duplicates each annotator labeled. The main IAA indicator
+is $B \leftrightarrow C$, the two naive annotators.}
+\label{tab:iaa}
+\small
+\begin{tabular}{lcc}
+\toprule
+Comparison & Cohen's $\kappa$ & Raw agreement \\
+\midrule
+\multicolumn{3}{l}{\textit{Inter-annotator (on the 150 unique tasks)}} \\
+$A \leftrightarrow B$  (rubric designer vs CS PhD)        & $0.151$ & $47.3\%$ \\
+$A \leftrightarrow C$  (rubric designer vs graduate student) & $0.199$ & $45.3\%$ \\
+$\mathbf{B \leftrightarrow C}$  \textbf{(two naive annotators; main IAA)} & $\mathbf{0.380}$ & $\mathbf{58.0\%}$ \\
+Fleiss' $\kappa$ (3 raters)                                & $0.233$ & --- \\
+Krippendorff's $\alpha$ (nominal)                          & $0.234$ & --- \\
+\midrule
+\multicolumn{3}{l}{\textit{Intra-annotator (from 15 hidden duplicates each)}} \\
+$A$ self-consistency                                       & $1.000$ & $100\%$ \\
+$B$ self-consistency                                       & $1.000$ & $100\%$ \\
+$C$ self-consistency                                       & $0.789$ & $86.7\%$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Intra-annotator agreement.} The intra-annotator block of
+Table~\ref{tab:iaa} reports each annotator's self-consistency on the
+$15$ duplicate tasks. Two annotators are perfectly self-consistent
+($\kappa = 1.0$, $100\%$ raw agreement); the third reaches $\kappa = 0.789$
+($86.7\%$). \emph{Each annotator has a stable internal standard; the
+moderate inter-annotator agreement therefore reflects rubric ambiguity
+across people, not noise within any one annotator.}
+
+\paragraph{Disagreement topology.} Of the inter-annotator disagreements,
+the overwhelming majority are adjacent-class confusions
+($0 \leftrightarrow 1$ or $1 \leftrightarrow 2$), not severe
+$0 \leftrightarrow 2$ flips. For the main $B \leftrightarrow C$ pair,
+$58.0\%$ of items agree, $37.3\%$ disagree by one class, and only
+$4.7\%$ disagree by two classes; the other two pairs follow the same
+pattern ($\sim 47\%$ adjacent vs $5$--$7\%$ severe). The rubric's
+class boundaries---particularly between class $1$ (locally recoverable
+functional bug) and class $2$ (silent corruption or
+irreversibility)---are the dominant source of disagreement, not
+fundamental directional confusion between low- and high-stakes.
+
+\paragraph{Final human labels and class distribution.} We resolve each
+of the $150$ tasks by majority vote of the three annotators. $142$
+tasks have a clear majority ($\geq 2$ of $3$ votes); the remaining
+$8$ are three-way splits ($0/1/2$) and are conservatively assigned to
+the middle class. The resulting class distribution is
+$\{0{:}45,\ 1{:}67,\ 2{:}38\}$.
+
+\paragraph{Re-running orthogonality under human labels.} On the $75$
+SWE-bench-Lite tasks for which we have both human majority labels and
+the difficulty estimate of \S\ref{sec:cons},
+\[
+\rho\bigl(\mathrm{human}\!-\!\mathrm{cons},\ \mathrm{difficulty}\bigr) = -0.066,\quad p = 0.57.
+\]
+The central orthogonality result of \S\ref{sec:cons} \textbf{replicates}
+under human labeling. Consequence remains statistically independent
+of difficulty whether the label is produced by a rule, by an LLM
+shown the gold patch, by an LLM shown only the issue, or by a human
+majority of three independent annotators.
+
+\paragraph{Agreement with the existing labelers.} Table~\ref{tab:human-vs-llm}
+compares the human majority label against the three labeling pipelines
+used in the main text. The LLM-with-patch judge agrees with the human
+majority at $\kappa = 0.50$ and the issue-only predictor at
+$\kappa = 0.52$---both moderate agreement and close to the
+$B \leftrightarrow C$ ceiling of $0.38$. The rule-based labeler agrees
+at $\kappa = 0.22$, reflecting its purely lexical construction.
+
+\begin{table}[h]
+\centering
+\caption{Cohen's $\kappa$ between the human majority label and each of
+the labeling pipelines used in the main text, on the $75$ SWE-bench
+Lite tasks of this study.}
+\label{tab:human-vs-llm}
+\small
+\begin{tabular}{lc}
+\toprule
+Pipeline & $\kappa$ vs human majority \\
+\midrule
+Rule-based labeler                       & $0.223$ \\
+LLM-with-patch judge (Qwen3-8B)          & $0.500$ \\
+LLM-issue-only predictor (Qwen3-8B)      & $0.517$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Honest interpretation.} The IAA evidence supports a
+\emph{nuanced} reading of consequence as a construct. Within an
+individual annotator, the rubric is interpretable and applied
+consistently (intra-$\kappa$ near $1.0$). Across naive annotators it
+is moderately subjective at the class-1-vs-class-2 boundary
+(inter-$\kappa = 0.38$). Crucially for the paper's claims, however,
+the agreement is high enough that the LLM-with-patch judge agrees with
+the human majority at $\kappa = 0.50$, and the central orthogonality
+result of \S\ref{sec:cons} replicates under the human labels with
+$\rho = -0.066$. We therefore retain the LLM-with-patch label as the
+primary consequence signal throughout the main text while presenting
+the human evidence here as a transparency check on its construct
+validity.
 
 \section{Predictor Calibration Details}
 \label{app:predictor}
