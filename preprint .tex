@@ -1,94 +1,67 @@
 % Not All Errors Are Equal: Consequence-Aware Reasoning Compute Allocation
-% Target: ICLR 2027 (deadline ~Sept-Oct 2026)
+% arXiv submission version
 
 \documentclass{article}
-\usepackage{iclr2026_conference,times}
-
+\usepackage{times}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{natbib}
 \input{math_commands.tex}
 
 \usepackage[hidelinks,colorlinks=false]{hyperref}
 \usepackage{url}
 \usepackage{graphicx}
 \usepackage{amsmath}
+\usepackage{amssymb}
 \usepackage{algorithm}
 \usepackage{algorithmic}
 \usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{microtype}
+\usepackage[margin=1.4in]{geometry}
+
 \title{Not All Errors Are Equal:\\Consequence-Aware Reasoning Compute Allocation}
 
-% The \author macro works with any number of authors. Use \And or \AND
-% to break the author list across columns; we go anonymous for submission.
-\author{Anonymous authors\\
-Paper under double-blind review}
-
-\newcommand{\fix}{\marginpar{FIX}}
-\newcommand{\new}{\marginpar{NEW}}
-
-\iclrfinalcopy % Uncomment for camera-ready
+\author{
+Jingbo Wen$^{1}$ \quad
+Liang He$^{2,\ast}$ \quad
+Ziqi He$^{1}$ \\[4pt]
+$^{1}$The University of Sydney \\
+$^{2}$Shanghai Institute of Optics and Fine Mechanics \\[4pt]
+\texttt{hel@siom.ac.cn} \\[2pt]
+$^\ast$Corresponding authors
+}
 
 \begin{document}
 
 \maketitle
 
 \begin{abstract}
-Modern reasoning models can allocate different amounts of test-time
-computation, such as thinking tokens, model calls, or compute budget, to different tasks. Existing methods generally drive this allocation by predicted difficulty and spend more compute where it is expected to raise accuracy. This implicitly assumes that all failures cost the same, since an accuracy objective weights every task equally. However, such an assumption does not hold in deployment: A typo in a log message and a migration that corrupts a production database both count as one benchmark failure, but their real-world costs are fundamentally different.
-We propose consequence-aware test-time compute allocation. Instead of routing compute only by predicted difficulty, we use a lightweight predictor to estimate from the issue text how costly a task would be if solved incorrectly. The scheduler then routes higher-consequence tasks to larger compute tiers or higher thinking budgets under the same total budget. We conduct main experiments on SWE-bench Lite and evaluate cross-dataset behavior on Multi-SWE-bench mini, covering
-700 software-engineering tasks in total. Our results reveal that consequence and difficulty are approximately orthogonal under various annotations, and that current thinking models do not allocate compute sufficiently according to consequence. Moreover, our issue-only predictor never misclassifies a high-consequence task as low-consequence across the 300 SWE-bench tasks. Under matched compute budgets, our consequence-aware scheduler reduces cost-weighted loss by 22\%–33\% relative to difficulty-aware routing; in particular, the priority-aware variant---which routes by per-task cost scaled by the marginal-utility signal---crosses 30\%, and its deployable predictor-driven version retains over 90\% of the oracle gain. Notably, difficulty-aware routing performs worse than random, as the hardest tasks are unsolvable at any tier. 
+Modern reasoning models can allocate different amounts of test-time computation, such as thinking tokens, model calls, or compute budget, to different tasks. Existing methods generally drive this allocation by predicted difficulty and spend more compute where it is expected to raise accuracy. This implicitly assumes that all failures cost the same, since an accuracy objective weights every task equally. However, such an assumption does not hold in deployment: A typo in a log message and a migration that corrupts a production database both count as one benchmark failure, but their real-world costs are fundamentally different. To fill this gap,
+we propose consequence-aware test-time compute allocation. Instead of routing compute only by predicted difficulty, we use a lightweight predictor to estimate from the issue text how costly a task would be if solved incorrectly. The scheduler then routes higher-consequence tasks to larger compute tiers or higher thinking budgets under the same total budget. We conduct main experiments on SWE-bench Lite and evaluate cross-dataset behavior on Multi-SWE-bench mini, covering
+700 software-engineering tasks in total. Our results reveal that consequence and difficulty are approximately orthogonal under various annotations, and that current thinking models do not allocate compute sufficiently according to consequence. Moreover, our issue-only predictor never misclassifies a high-consequence task as low-consequence across the 300 SWE-bench tasks. Under matched compute budgets, our consequence-aware scheduler reduces cost-weighted loss by 22\%–33\% relative to difficulty-aware routing; in particular, the priority-aware variant---which routes by per-task cost scaled by the marginal-utility signal---crosses 30\%, and its deployable predictor-driven version retains over 90\% of the oracle gain. Notably, difficulty-aware routing performs worse than random, as the hardest tasks are unsolvable at any tier.
 \end{abstract}
-
 
 \section{Introduction}
 \label{sec:intro}
 
-Modern reasoning models---including OpenAI's o-series, DeepSeek-R1,
-Anthropic's Claude with extended thinking, and Qwen3-Thinking---do not
-spend the same amount of computation on every input. Instead, they vary
-how long they think from task to task, often producing longer reasoning
-traces on inputs that appear more difficult. This behavior aligns with
-a broader trend in adaptive test-time compute: learned
+Modern reasoning models, such as OpenAI's o-series, DeepSeek-R1,
+Anthropic's Claude with extended thinking, and Qwen3-Thinking, can decide
+how much test-time computation to spend on each input~\citep{li2025reasoningllms}. In practice, they
+vary how long they think from task to task, often producing longer
+reasoning traces on inputs that appear more difficult~\citep{alomrani2025reasoningbudget,zhu2025adaptivethinking}. The same principle
+is pursued explicitly in adaptive test-time compute, where learned
 routers~\citep{damani2024learning}, compute-difficulty scaling
 laws~\citep{snell2024scaling}, and confidence-driven early
-stopping~\citep{manvi2024adaptive} all operationalize the same basic
-principle: spend more compute on harder tasks.
+stopping~\citep{manvi2024adaptive} differ in mechanism but follow a common
+rule, namely that harder tasks deserve more compute.
 
-This principle is natural if the only goal is to maximize average
-accuracy under a compute budget. In that setting, each task contributes
-one unit to the benchmark score, and extra computation is valuable
-whenever it increases the probability of solving the task. However,
-this view also makes an implicit assumption: errors on different tasks
-are interchangeable. That assumption is convenient for benchmarks, but
-it is often false in deployment. Consider two failures a coding
-assistant might produce on the same day: a typo in a log message and a
-database migration that silently corrupts a production table under a
-race condition. On a benchmark, both count as one failed task. In
-deployment, their consequences are not remotely comparable. The latter
-is worth substantially more computation to avoid, even if the two tasks
-have similar predicted difficulty.
 
-This mismatch suggests that the central question in test-time compute
-allocation should not only be whether a task is hard, but also whether
-being wrong is costly. We therefore argue for a cost-weighted view of
-reasoning compute. Rather than optimizing the standard
-accuracy--compute tradeoff
-\begin{equation}
-\max_{\pi}\ \mathrm{acc}(\pi) - \lambda\,c(\pi),
-\end{equation}
-a deployment-oriented scheduler should minimize cost-weighted risk:
-\begin{equation}\label{eq:objective}
-c^{\ast}(x) \;=\; \arg\min_{c}\ \alpha\!\cdot\!c \;+\;
-\mathrm{cost}(x)\cdot P(\mathrm{err}\mid x, c),
-\end{equation}
-where $\mathrm{cost}(x)$ denotes the loss incurred if the model gets
-task $x$ wrong. When $\mathrm{cost}(x)$ is constant across tasks, this
-objective reduces to the usual accuracy-driven formulation. When
-$\mathrm{cost}(x)$ varies, however, difficulty alone is no longer a
-sufficient routing signal. The closest prior framing is rational
-metareasoning~\citep{russell1991right, hay2012selecting,
+This principle is natural for benchmarks that optimize average accuracy under a compute budget. In such settings, each task contributes one unit to the final score, and every failure is assumed to be interchangeable~\citep{alomrani2025reasoningbudget}. However, this is not how deployment works, and such an assumption generally does not hold in deployment. Consider two failures a coding assistant might produce on the same day: a typo in a log message and a database migration that silently corrupts a production table under a race condition. A benchmark records both as one failed task, but in deployment their costs are nowhere near equal: preventing the migration error is worth far more compute, even when the two are equally hard to fix.
+
+This deployment mismatch exposes a missing term in current LLM adaptive-compute objectives. The closest prior framing is rational metareasoning~\citep{russell1991right, hay2012selecting,
 yang2024rational}, which treats computation as an action whose value
-depends on its expected utility. Modern LLM implementations of
-adaptive compute, however, typically collapse this utility term into a
-uniform accuracy objective, effectively taking
-$\mathrm{cost}(x)\equiv 1$.
+depends on its expected utility. From this perspective, additional reasoning is useful only when the expected reduction in downstream loss exceeds the cost of computation~\citep{alomrani2025reasoningbudget,sayin2025rethinking}. Modern LLM implementations of adaptive compute, however, typically collapse this utility term into a uniform accuracy objective~\citep{li2025reasoningllms}. We therefore move beyond difficulty-aware allocation and cast consequence-aware allocation as a cost-weighted problem: for each task, a scheduler should choose a compute tier that trades off the price of additional computation against the expected consequence-weighted error~\citep{qu2026adaptivetesttime}. When all tasks have equal error cost, this objective reduces to standard accuracy maximization under a compute budget~\citep{alomrani2025reasoningbudget}. When error costs vary, however, difficulty alone is no longer a sufficient routing signal.
 
 \begin{figure}[t]
 \centering
@@ -109,30 +82,33 @@ routing observed later in the paper.}
 
 One might hope that sufficiently strong reasoning models already learn
 this distinction implicitly. If high-consequence tasks naturally induce
-longer reasoning traces, then an explicit cost signal would be less
-necessary. We test this possibility directly in
+longer reasoning traces, then an explicit cost signal would be unnecessary. We test this possibility directly in
 Figure~\ref{fig:motivation} by auditing three contemporary thinking
 models on SWE-bench Lite. The results show three different failure
 modes. Qwen3-8B varies its thinking length, but that variation is
 essentially uncorrelated with consequence
 ($\rho = 0.002$). Qwen3-VL-8B-Thinking reaches its 8192-token cap on
-$99.3\%$ of tasks, leaving almost no room for task-specific allocation.
+$99.3\%$ of tasks, leaving almost no room for task-specific allocation~\citep{pan2025slowthinking}.
 Claude Sonnet 4.5 with extended thinking shows a statistically
 significant relationship between thinking length and consequence
 ($\rho = 0.20$, $p = 0.008$, $n = 171$), but the effect is small:
 high-consequence tasks receive only $20.5\%$ more thinking than
-low-consequence tasks. Thus, existing thinking models exhibit either no
-consequence signal, saturation, or only weak consequence sensitivity.
-
+low-consequence tasks.
+Thus, existing thinking models exhibit either no
+consequence signal, saturation, or only weak consequence sensitivity~\citep{liu2025efficientreasoning}.
 
 Motivated by this gap, we propose consequence-aware test-time
-compute allocation. The method separates two decisions that are often
-conflated. First, a lightweight predictor estimates the deployment-time
+compute allocation.
+The method separates two decisions that are often
+conflated~\citep{shirkavand2025costaware}.
+First, a lightweight predictor estimates the deployment-time
 cost of an error directly from the issue text, before the task is
-solved. Second, a scheduler uses this predicted consequence to route
+solved.
+Second, a scheduler uses this predicted consequence to route
 higher-consequence tasks to larger compute tiers, or equivalently to
 larger thinking budgets, under the same total compute budget as a
-difficulty-based baseline. The reasoning model itself is not retrained;
+difficulty-based baseline.
+The reasoning model itself is not retrained;
 the intervention operates entirely at the scheduling layer.
 
 The remainder of the paper builds the empirical case in four steps.
@@ -182,9 +158,7 @@ at every available tier (\S\ref{sec:exp}, \S\ref{sec:whyfail}).
 
 \textbf{Adaptive test-time compute.}
 A growing body of work studies how much computation a language model
-should spend on each input. \citet{snell2024scaling} establish
-compute--difficulty scaling laws, showing that the optimal token
-budget varies with predicted task difficulty. \citet{damani2024learning}
+should spend on each input. \citet{snell2024scaling} analyze how the effectiveness of different test-time scaling strategies, and derive difficulty-dependent compute-optimal policies for using a fixed inference budget. \citet{damani2024learning}
 train a reward predictor to allocate compute according to expected
 accuracy gain. \citet{manvi2024adaptive} use token-level confidence
 to stop generation early when the model is already confident. Although
@@ -202,94 +176,83 @@ The decision-theoretic view of computation as a costly action dates
 back to rational metareasoning~\citep{russell1991right,
 hay2012selecting}. In this framework, additional computation is useful
 only when its expected utility exceeds its computational cost.
-This perspective is closely aligned with our formulation: the value of
-thinking more depends not only on whether extra compute improves the
-answer, but also on how valuable it is to avoid the error. Recent work
+This perspective is closely aligned with our formulation: Whether a task is worth more compute depends not only on how much that compute would improve the answer, but on how costly an error would be. Recent work
 has begun to apply rational metareasoning to large language
 models~\citep{yang2024rational}. However, in most LLM adaptive-compute
 settings, utility is operationalized as accuracy, reward, or confidence
-rather than as a task-dependent cost of error. Equation~\eqref{eq:objective}
-can be viewed as instantiating the rational-metareasoning objective
-with an explicit per-task consequence term.
+rather than as a task-dependent cost of error.
 
 \textbf{Cost-sensitive learning and selective prediction.}
 Cost-sensitive learning studies classification under asymmetric error
 costs~\citep{elkan2001foundations}, while selective prediction allows
 a model to abstain when it is uncertain~\citep{geifman2017selective}.
 Both lines of work recognize that errors are not interchangeable. The
-difference is where the cost signal is used. Cost-sensitive learning
-typically changes the training objective or decision rule, and
-selective prediction decides whether to answer at all. In contrast,
-we use the cost signal at compute time: the model still answers every
-task, but the scheduler decides how much computation the task should
-receive before answering. This makes the approach compatible with
-existing reasoning models without retraining.
+difference lies in where the cost signal is used. Cost-sensitive learning
+typically changes the training objective or decision rule, and selective prediction decides whether to answer at all. In contrast, we use the cost signal at compute time: the model still answers every
+task, but the scheduler decides how much computation the task should receive before answering. This makes the approach compatible with existing reasoning models without retraining.
 
 \textbf{Software-engineering benchmarks.}
-We use SWE-bench Lite~\citep{jimenez2023swebench} as our primary
-testbed and a 400-task subset of Multi-SWE-bench~\citep{ma2024multiswebench}
-for cross-dataset validation. Software-engineering tasks are a natural
-setting for consequence-aware allocation because they contain both
-large variation in task difficulty and large variation in deployment
-risk. A documentation typo, a parser edge case, a permission bug, and
-a database migration error may all appear as single pass/fail tasks in
-a benchmark, yet their real-world consequences differ substantially.
-The availability of issue reports, file paths, and gold patches also
-allows us to compare deployment-time issue-only prediction with
-with-patch consequence labels.
-\section{Consequence as a Construct}
+We use SWE-bench Lite~\citep{jimenez2023swebench} as our primary testbed and a 400-task subset of Multi-SWE-bench~\citep{ma2024multiswebench}
+for cross-dataset validation. Software-engineering tasks are a natural setting for consequence-aware allocation because they contain both large variation in task difficulty and large variation in deployment
+risk. A documentation typo, a parser edge case, a permission bug, and a database migration error may all appear as single pass/fail tasks in a benchmark, yet their real-world consequences differ substantially.
+The availability of issue reports, file paths, and gold patches also allows us to compare deployment-time issue-only prediction with with-patch consequence labels.
+
+\section{Definition and Measurement of Consequence}
 \label{sec:cons}
 
 We first define consequence as a measurable property of a task, describe three independent labeling pipelines, and show that consequence is statistically distinct from both difficulty and model-disagreement-based confidence.
 
-\textbf{Definition.} We define the consequence of a task as an ordinal label in $\{0, 1, 2\}$ reflecting the realized deployment cost if the fix is wrong:
+\textbf{Definition.} We define the consequence of a task as an ordinal label in $\{0, 1, 2\}$ reflecting the realized deployment cost if the model produces an incorrect fix:
 \begin{itemize}\itemsep0pt
   \item \textbf{0 (low).} Cosmetic, formatting, documentation, or log-message errors. These are noticeable to the user but do not corrupt downstream systems.
   \item \textbf{1 (medium).} Functional but contained bugs, such as an API returning the wrong value, a feature crashing on an edge case, or temporary unavailability. Errors are observable and locally recoverable.
-  \item \textbf{2 (high).} Silent data corruption, security or permission bypass, irreversible operations (delete/overwrite/migration), or incorrect results consumed downstream without visibility.
+  \item \textbf{2 (high).} Silent data corruption, security or permission bypass, irreversible operations (delete/overwrite/migration), or incorrect results consumed downstream without visibility. The error is neither observable nor recoverable in time, which makes it the most costly to get wrong.
 \end{itemize}
 
 \textbf{Labeling pipelines.} Each task in SWE-bench Lite ($N{=}300$) and Multi-SWE-bench mini ($N{=}400$) is labeled via three independent pipelines:
 (i) A rule-based labeler using lexical patterns in file paths and gold patches (e.g., \texttt{delete}, \texttt{auth}, \texttt{migration}).
 (ii) An LLM-with-patch judge (Qwen3-8B) that observes issue text, gold patch, and modified files. This serves as the \textbf{primary} consequence label in our experiments because it can see the realized fix.
-(iii) An LLM-issue-only predictor (\S\ref{sec:pred}) that sees only the issue text and file path, matching the information available to a deployment-time scheduler. It tests whether consequence can be predicted before solving the task.
+(iii) An LLM-issue-only predictor (\S\ref{sec:pred}) that reads only the issue text and file path, matching the information available to a deployment-time scheduler. It tests whether consequence can be predicted before solving the task.
 
-\textbf{Consequence is orthogonal to difficulty.} Difficulty is measured as $1-\overline{\mathrm{passrate}}$ across 16 public SWE-bench solvers. Under both rule-based and LLM-with-patch labeling, rank correlations with difficulty are near zero: $\rho_{\mathrm{rule}}{=}{+}0.047$ ($p>0.4$), $\rho_{\mathrm{LLM\text{-}patch}}{=}{-}0.096$ ($p>0.09$). This finding is replicated in a 150-task human annotation study with three independent labelers ($\rho_{\mathrm{human}}{=}{-}0.066$, $p>0.5$; see Appendix~\ref{app:iaa}) and under the issue-only predictor ($\rho = -0.109$, $p=0.06$). All four labelings---rule-based, LLM-with-patch, issue-only, and human-majority---yield correlations within $\pm 0.11$, none statistically significant (Appendix~\ref{app:rubric}), and the pattern holds across SWE-bench sub-domains (Appendix~\ref{app:subdomain}). High-stakes tasks appear across the full difficulty spectrum: trivial typos can have high consequence (e.g., security-critical log redaction), and extremely difficult tasks can have low consequence (e.g., obscure parser edge cases). This establishes the central premise: difficulty alone cannot predict consequence, so difficulty-only schedulers are blind to deployment risk.
+\textbf{Consequence is orthogonal to difficulty.} Difficulty is measured as $1-\overline{\mathrm{passrate}}$ across 16 public SWE-bench solvers, where
+$\overline{\mathrm{passrate}}$ is each task's pass rate averaged across
+16 public SWE-bench solvers, and we report the Spearman rank correlation
+$\rho$ between difficulty and consequence. Under both rule-based and LLM-with-patch labeling, rank correlations with difficulty are near zero: $\rho_{\mathrm{rule}}{=}{+}0.047$ ($p>0.4$), $\rho_{\mathrm{LLM\text{-}patch}}{=}{-}0.096$ ($p>0.09$). The same near-zero pattern holds in a 150-task human annotation study with three independent labelers ($\rho_{\mathrm{human}}{=}{-}0.066$,
+$p>0.5$; Appendix~\ref{app:iaa}) and for the issue-only predictor
+($\rho_{\mathrm{issue}}{=}{-}0.109$, $p=0.06$). Across all four labelings, namely
+rule-based, LLM-with-patch, issue-only, and human-majority, the correlation stays within $\pm 0.11$ and never reaches significance
+(Appendix~\ref{app:rubric}), and the pattern holds across SWE-bench sub-domains (Appendix~\ref{app:subdomain}). High-consequence tasks appear at every difficulty level: a trivial typo can be high-consequence (e.g., security-critical log redaction), while an extremely hard task can be low-consequence (e.g., an obscure parser edge case). Difficulty therefore cannot predict consequence on its own, and a difficulty-only scheduler is blind to the deployment risk that consequence captures.
 
 \textbf{Consequence is not model confidence.} A natural follow-up question is whether consequence simply reflects cross-model disagreement, which some adaptive-compute schedulers use as a proxy for task difficulty. We address this in \S\ref{sec:whyfail}, using it to explain why difficulty-aware allocation systematically underperforms in cost-weighted scenarios.
+
 \section{Model Audit: Do Existing Thinkers Allocate by Consequence?}
 \label{sec:audit}
 
-A key question is whether strong reasoning models naturally allocate
-compute according to consequence. If so, the premise of our paper—
-that additional scheduling is necessary—would be weakened. We audit
-three contemporary reasoning models, each with a distinct compute-allocation
-mechanism, to measure whether their actual thinking length scales with
-the LLM-with-patch consequence label (Figure~\ref{fig:motivation}).
+A key question is whether strong reasoning models already allocate
+compute by consequence on their own. We therefore audit three contemporary reasoning models, each with a distinct compute-allocation mechanism as shown in Figure~\ref{fig:motivation}, to measure whether their actual thinking length scales with
+the LLM-with-patch consequence label.
 
-\textbf{Qwen3-8B (hybrid thinking).} Qwen3-8B~\citep{qwen2025qwen3} alternates
+\textbf{Qwen3-8B\footnote{\url{https://huggingface.co/Qwen/Qwen3-8B}}  (hybrid thinking).} Qwen3-8B alternates
 between ``thinking'' and ``direct'' modes via a control token. On 50
 SWE-bench Lite tasks with \texttt{max\_new\_tokens}$=4096$, the thinking-character
 count varies across tasks, but the rank correlation with consequence
-is negligible: $\rho(\mathrm{thinking}, \mathrm{cons}) = +0.002$. The model's
-compute allocation exhibits essentially no sensitivity to task consequence.
+is negligible with $\rho(\mathrm{thinking}, \mathrm{cons}) = +0.002$. Hence, the allocation carries essentially no consequence signal.
 
-\textbf{Qwen3-VL-8B-Thinking (dedicated thinking).} This variant
+\textbf{Qwen3-VL-8B-Thinking\footnote{\url{https://huggingface.co/Qwen/Qwen3-VL-8B-Instruct}} (dedicated thinking).} This variant
 produces a separate reasoning stream under a configurable token budget.
 On the same 50 tasks with \texttt{max\_new\_tokens}$=8192$, $99.3\%$
 of tasks reach the token cap. Because almost all tasks are saturated,
 there is no headroom for consequence-driven differentiation.
 
-\textbf{Claude Sonnet 4.5 with extended thinking.} We evaluate Claude~\citep{anthropic2025claude45}
+\textbf{Claude Sonnet 4.5\footnote{\url{https://www.anthropic.com/claude/sonnet}} with extended thinking.} We evaluate Claude 
 with a 16,000-token extended-thinking budget on 171 stratified SWE-bench Lite tasks.
-Here, thinking length shows a statistically significant relationship
-with consequence: $\rho = +0.203$, $p = 0.008$. The effect is small:
-high-consequence (class~2) tasks receive only 20.5\% more thinking
-than low-consequence (class~0) tasks (6135 vs 5090 characters on average).
+Here thinking length does correlate with consequence at a statistically
+significant level ($\rho = +0.203$, $p = 0.008$), but the effect is far
+too small to match the stakes.  High-consequence (class~2) tasks receive only 20.5\% more thinking than low-consequence (class~0) tasks (6135 vs 5090 characters on average).
 The median high-consequence task has $\approx 5\times$ the marginal
-value of extra compute (\S\ref{sec:exp}). Claude exhibits a weak emergent
-tendency toward consequence-aware allocation, but it is quantitatively
-inadequate for deployment.
+value of extra compute (\S\ref{sec:exp}).  Claude thus shows a weak emergent tendency
+toward consequence-aware allocation that is quantitatively inadequate for
+deployment.
 
 Across all three models, we observe distinct failure modes—no signal,
 saturation, or weak-but-insufficient consequence sensitivity. None
@@ -319,66 +282,40 @@ observed failure mode relative to the cost-weighted allocation objective.}
 \label{tab:audit}
 \end{table}
 
-\section{Predicting Consequence at Deployment Time}
+\section{Consequence Prediction at Deployment Time}
 \label{sec:pred}
 
 A consequence-aware scheduler must operate before the model produces a
 fix. At deployment time, it cannot inspect the gold patch or the final
 code diff; it can only use the information available in the issue
-itself. We therefore ask whether consequence can be predicted from the
-issue text and file path alone, and whether such predictions are safe
-enough to guide compute allocation.
+itself. We therefore ask whether consequence can be predicted from deployment-time
+information, i.e., the
+issue text and file path alone, and whether such predictions are reliable to guide compute allocation.
 
-\textbf{Setup.} We remove the gold patch and modified-file content
-from the LLM-with-patch judge of \S\ref{sec:cons}. The input to the
-predictor contains only the GitHub issue text and the affected file
-path, matching the information available to a deployment-time
-scheduler. Our primary predictor is Qwen3-8B in issue-only
-mode, evaluated against the Qwen3-8B with-patch reference label. As a
-cross-model robustness check, we also evaluate Claude Sonnet 4.5 in
-issue-only mode against the same Qwen3-8B with-patch reference. Both
-predictors output an ordinal consequence label in $\{0,1,2\}$ with a
-single forward pass.
+\textbf{Setup.} We remove the gold patch and modified-file content from the LLM-with-patch judge of \S\ref{sec:cons}. The input to the predictor contains only the GitHub issue text and the affected file path, matching the information available to a deployment-time scheduler. Our primary predictor is Qwen3-8B in issue-only mode, evaluated against the Qwen3-8B with-patch reference label. As a cross-model robustness check, we also evaluate Claude Sonnet 4.5 in
+issue-only mode against the same Qwen3-8B with-patch reference. Both predictors output an ordinal consequence label in $\{0,1,2\}$ with a single forward pass.
 
 \textbf{Agreement with the with-patch reference.} The primary Qwen
-issue-only predictor reaches Cohen's $\kappa = 0.572$ on all $300$
-SWE-bench Lite tasks, indicating substantial agreement on a
-three-class ordinal labeling problem. The cross-model Claude
-issue-only predictor reaches $\kappa = 0.379$, lower as expected for a
-different model family, but still above chance and useful as an
-independent robustness check. These agreement levels suggest that
-consequence is not only a post-hoc property of the gold patch; it is
-often inferable from the issue description before the fix is computed.
+issue-only predictor reaches Cohen's $\kappa = 0.572$ on all $300$ SWE-bench Lite tasks, indicating substantial agreement on a three-class ordinal labeling problem. The cross-model Claude issue-only predictor reaches $\kappa = 0.379$, lower than expected for a
+different model family, but remains above chance and useful as an independent robustness check. These results suggest that consequence is not only a post-hoc property of the gold patch; it is often inferable from the issue description before the fix is computed.
 
-\textbf{The errors that matter.} Aggregate agreement alone is not the
-right deployment criterion. For scheduling, the most dangerous error
-is not a small label mismatch, but a severe under-estimation of risk:
-routing a high-consequence task to the lowest compute tier. We
-therefore inspect the confusion matrix, focusing on the
-class-2$\to$class-0 cell.
+\textbf{The errors that matter.} For compute allocation, aggregate agreement is not the only criterion. The dangerous error for scheduling is not a small
+label mismatch but a severe under-estimation of risk, namely routing a
+high-consequence task to the lowest compute tier. We therefore inspect
+the confusion matrix, focusing on the class-2$\to$class-0 cell.
 
-For the primary Qwen predictor, the with-patch reference labels $44$
-tasks as high consequence. The issue-only predictor labels $39$ of
-them as class~2 and the remaining $5$ as class~1, yielding class-2
-recall of $88.6\%$. Crucially, it never predicts class~0 for a
-class~2 task, giving a severe under-allocation rate of
+For the primary Qwen predictor, the with-patch reference labels $44$ tasks as high consequence. The issue-only predictor labels $39$ of them as class~2 and the remaining $5$ as class~1, yielding class-2
+recall of $88.6\%$. Crucially, it never predicts class~0 for a class~2 task, giving a severe under-allocation rate of
 $0/44 = 0\%$. The cross-model Claude predictor has lower class-2
 recall, $52.3\%$ ($23/44$), but it preserves the same safety-critical
 property: class-2$\to$class-0 remains $0/44$. This suggests that the
 absence of high-to-low errors is driven by the issue text and the
-consequence rubric rather than by a single model family
-(Table~\ref{tab:predictor}; Figure~\ref{fig:confusion}). Full
-per-class metrics are reported in Appendix~\ref{app:predictor}.
+consequence rubric rather than by a single model family (Table~\ref{tab:predictor}; Figure~\ref{fig:confusion}). Full per-class metrics are reported in Appendix~\ref{app:predictor}.
 
 \begin{table}[h]
 \centering
 \caption{\textbf{Predictor calibration vs.\ the LLM-with-patch
-reference} on 300 SWE-bench Lite tasks. The deployment-critical
-``never miss a high-consequence task as low'' property
-(Class-2$\,\to\,$Class-0 $= 0/44$) holds for both predictors.
-The cross-model Claude predictor has lower aggregate agreement and
-lower class-2 recall, but preserves the same safety-critical
-under-allocation property.}
+reference} on 300 SWE-bench Lite tasks. The deployment-critical ``never miss a high-consequence task as low'' property (Class-2$\,\to\,$Class-0 $= 0/44$) holds for both predictors. The cross-model Claude predictor has lower aggregate agreement and lower class-2 recall, but preserves the same safety-critical under-allocation property.}
 \label{tab:predictor}
 \small
 \resizebox{\linewidth}{!}{%
@@ -398,37 +335,30 @@ Claude Sonnet~4.5 issue-only (cross-model)
 \begin{figure}[t]
 \centering
 \includegraphics[width=0.95\linewidth]{fig_confusion.pdf}
-\caption{\textbf{Predictor confusion matrices} against the
-LLM-with-patch reference on 300 SWE-bench Lite tasks. Rows denote the
-reference class and columns denote the predicted class. The
-deployment-critical under-allocation cell, true class~2 and predicted
-class~0, is empty for both predictors. The primary Qwen predictor
-(left) has higher class-2 recall ($39/44$) than the cross-model Claude
-predictor (right; $23/44$), but both avoid the high-to-low error that
-would route a high-consequence task to the lowest compute tier.}
+\caption{\textbf{Predictor confusion matrices} against the LLM-with-patch reference on 300 SWE-bench Lite tasks. Rows denote the reference class and columns denote the predicted class. The deployment-critical under-allocation cell, true class~2 and predicted class~0, is empty for both predictors. The primary Qwen predictor
+(left) has higher class-2 recall ($39/44$) than the cross-model Claude predictor (right; $23/44$), but both avoid the high-to-low error that would route a high-consequence task to the lowest compute tier.}
 \label{fig:confusion}
 \end{figure}
 
-This error pattern is imperfect but useful for deployment. When the
-predictor is wrong, it typically errs to an adjacent class, so a
-high-consequence task is routed at worst to a medium budget rather
+This predictor is imperfect, but its error pattern is useful for deployment. When the
+predictor is wrong, it typically errs to an adjacent class, so a high-consequence task is routed at worst to a medium budget rather
 than to the cheapest tier. In \S\ref{sec:exp}, we show that this
-safety-respecting predictor is sufficient for downstream allocation:
-on SWE-bench Lite, predictor-driven routing retains most of the gain
-achieved by oracle-consequence routing under the same compute budget.
+safety-respecting predictor is sufficient for downstream allocation: on SWE-bench Lite, predictor-driven routing retains most of the gain achieved by oracle-consequence routing under the same compute budget.
+
 \section{Method: Cost-Weighted Compute Allocation}
 \label{sec:method}
+The previous sections establish that consequence is a measurable,
+task-level cost signal distinct from difficulty (\S\ref{sec:cons}), that
+current thinking models do not allocate compute by it on their own
+(\S\ref{sec:audit}), and that it can be predicted before a task is solved
+from issue-level information alone (\S\ref{sec:pred}). Together these make
+an explicit scheduling layer both necessary and feasible. We now specify
+how that scheduler should use the consequence signal under a fixed
+compute budget.
 
-We now specify how a scheduler should use the consequence signal.
-The setup is a multi-tier compute system: a finite set of compute
-tiers $\{T_1, \ldots, T_K\}$ ordered from cheap to expensive,
-where each tier is either a different model family, a different
-sampling temperature, a different self-consistency budget, or a
-different thinking-token budget on the same model. The deployer has a
-total compute budget $B$ to spend across a stream of tasks $X$.
+The setup is a multi-tier compute system: a finite set of compute tiers $\{T_1, \ldots, T_K\}$ ordered from cheap to expensive, where each tier is either a different model family, a different sampling temperature, a different self-consistency budget, or a different thinking-token budget on the same model. The deployer has a total compute budget $B$ to spend across a stream of tasks $X$.
 
-\textbf{Objective.} Minimizing the cost-weighted loss on the task
-stream under a total-compute constraint is
+\textbf{Objective.} Minimizing the cost-weighted loss on the task stream under a total-compute constraint is
 \begin{equation}\label{eq:budgetobj}
 \min_{T:\,X\to\{T_1,\dots,T_K\}}\ \sum_{x\in X}\, \mathrm{cost}(x)\cdot
 \bigl[\,1 - p\bigl(\text{correct}\mid x, T(x)\bigr)\bigr]
@@ -436,21 +366,14 @@ stream under a total-compute constraint is
 \sum_{x\in X} c(T(x)) \leq B,
 \end{equation}
 where $c(T_k)$ is the per-task compute price of tier $T_k$. With
-$\mathrm{cost}(x){\equiv}1$, Eq.~\eqref{eq:budgetobj} reduces to plain
-accuracy maximization under a compute budget---the objective implicit
-in prior adaptive-compute work.
+$\mathrm{cost}(x){\equiv}1$, Eq.~\ref{eq:budgetobj} reduces to plain
+accuracy maximization under a compute budget---the objective implicit in prior adaptive-compute work.
 
-\textbf{Algorithm.} We instantiate Eq.~\eqref{eq:budgetobj} with a
-simple decoupled scheme. Given the predicted consequence
-$\hat{c}(x) \in \{0,1,2\}$ from \S\ref{sec:pred} and a target overall
-compute budget $B$, we sort tasks by $\hat{c}(x)$ in descending order
-and assign them to compute tiers from premium to cheap until the
-budget is exhausted (Algorithm~\ref{alg:cons-route}). In the
-fixed-quota variants of \S\ref{sec:exp}, the top-$q\%$ tasks by
+\textbf{Algorithm.} We instantiate Eq.~\ref{eq:budgetobj} with a simple decoupled scheme. Given the predicted consequence $\hat{c}(x) \in \{0,1,2\}$ from \S\ref{sec:pred} and a target overall
+compute budget $B$, we sort tasks by $\hat{c}(x)$ in descending order and assign them to compute tiers from premium to cheap until the
+budget is exhausted (Algorithm~\ref{alg:cons-route}). In the fixed-quota variants of \S\ref{sec:exp}, the top-$q\%$ tasks by
 $\hat{c}$ go to the premium tier and the rest go to the cheap tier;
-$q$ is chosen so that total compute matches the difficulty-based
-baseline. This decoupled scheme assumes a monotone relationship
-between $\hat{c}$ and the marginal value of more compute---an
+$q$ is chosen so that total compute matches the difficulty-based baseline. This decoupled scheme assumes a monotone relationship between $\hat{c}$ and the marginal value of more compute---an
 assumption we test directly in \S\ref{sec:exp}.
 
 \begin{algorithm}
@@ -482,7 +405,7 @@ oracle-consequence routing, with a random predictor we recover random
 routing, and with the difficulty score substituted for $\hat{c}$ we
 recover the Snell-style difficulty-aware baseline.
 
-\section{Consequence-Aware Allocation Reduces Cost-Weighted Loss}
+\section{Experiments}
 \label{sec:exp}
 
 We test Algorithm~\ref{alg:cons-route} on a 16-model SWE-bench
@@ -515,7 +438,7 @@ variant, and the cross-model Claude predictor, which serves as a
 robustness check. Consequence-aware (oracle) replaces the
 predictor with the LLM-with-patch label, isolating the upper bound of
 a one-signal consequence router. Finally, Priority-aware
-(predictor / oracle) routes the top-$q\%$ by
+(predictor/oracle) routes the top-$q\%$ by
 $\hat{c}(x) \cdot [p_{\mathrm{premium}}(x) -
 p_{\mathrm{cheap}}(x)]$. This two-signal variant accounts not only
 for the cost of an error, but also for whether premium compute is
@@ -607,11 +530,12 @@ an incomplete routing signal under a cost-weighted objective; at this
 operating point, it routes premium compute toward tasks with low
 marginal return. The next section analyzes this failure mechanism by
 decomposing consequence, difficulty, confidence, and marginal utility.
+
 \section{Why Difficulty-Aware Allocation Fails}
 \label{sec:whyfail}
 
-The results of \S\ref{sec:exp} demand an explanation. Why does a
-strategy that allocates more compute to harder tasks do worse than
+The results of \S\ref{sec:exp} raise a natural question: Why does a
+strategy that allocates more compute to harder tasks perform worse than
 allocating randomly? We answer this question in two steps. First, we
 rule out the alternative interpretation that consequence is merely a
 re-skinning of cross-model disagreement, which is the signal that many
@@ -619,18 +543,16 @@ confidence-based adaptive-compute methods already exploit. Second, we
 examine per-task marginal utility and show that difficulty is
 anti-correlated with where additional compute actually helps.
 
-\subsection{Confounding ablation: consequence is not a re-skin of confidence}
+\subsection{Confounding ablation: consequence is not a proxy of confidence}
 \label{sec:p0b}
 
-A reviewer might argue that consequence works only because it
-inadvertently captures another useful signal: cross-model disagreement
-on a task, which acts as a confidence proxy. To test this alternative,
-we construct
+One might argue that consequence works only because it
+inadvertently captures another useful signal, namely cross-model disagreement on a task, which acts as a confidence proxy. To test this alternative, we construct
 \[
 Y(x) \;=\; \mathrm{cons}(x)\cdot
 \bigl[\,p_{\mathrm{premium}}(x) - p_{\mathrm{cheap}}(x)\,\bigr],
 \]
-the cost-weighted marginal value of routing task $x$ to the premium
+the cost-weighted marginal gain of routing task $x$ to the premium
 tier. We then ask whether consequence carries information about
 $Y(x)$ beyond what is already explained by difficulty and per-task
 pass-rate variance. The latter measures how much public solvers
@@ -641,9 +563,7 @@ correlation remains large:
 \rho\bigl(\,\mathrm{cons},\, Y \,\big|\, \mathrm{diff},\,
 \mathrm{passvar}\,\bigr) = +0.696,\quad p < 10^{-43}.
 \]
-A hierarchical regression on $Y(x)$ confirms the same conclusion
-(Table~\ref{tab:r2decomp}). Difficulty plus pass-rate variance explains
-$R^2 = 0.474$, while adding consequence increases this to
+A hierarchical regression on $Y(x)$ confirms the same conclusion, as shown in Table~\ref{tab:r2decomp}. Difficulty plus pass-rate variance explains $R^2 = 0.474$, while adding consequence increases this to
 $R^2 = 0.738$. This is an absolute gain of $26.4$ percentage points,
 or $+55.7\%$ relative. Moreover, difficulty contributes almost no
 incremental variance once pass-rate variance is included
@@ -677,6 +597,7 @@ $\Delta R^{2}$ from adding Consequence                & $\mathbf{+0.264}$ \;($+5
 \bottomrule
 \end{tabular}
 \end{table}
+
 \begin{figure}[t]
 \centering
 \includegraphics[width=\linewidth]{fig_marginal.pdf}
@@ -693,6 +614,7 @@ compute to the difficulty tail therefore spends budget where extra
 compute rarely changes the outcome.}
 \label{fig:marginal}
 \end{figure}
+
 \subsection{Marginal utility: hardest tasks are unsolvable at any tier}
 \label{sec:marginal}
 
@@ -740,10 +662,7 @@ difficulty-aware allocation. A cost-blind scheduler that spends more
 compute on harder tasks spends its budget where extra compute has the
 lowest marginal return. Figure~\ref{fig:marginal} visualizes this
 effect. $\Delta\mathrm{success}$ rises with difficulty up to the
-moderate range and then collapses on the unsolvable tail, producing
-the strongly negative Spearman correlation. Appendix~\ref{app:marginal}
-reports the per-task view: the top-ranked tasks by priority have
-moderate difficulty and large $\Delta\mathrm{success}$, whereas the
+moderate range and then collapses on the unsolvable tail, producing the strongly negative Spearman correlation. Appendix~\ref{app:marginal} reports the per-task view: the top-ranked tasks by priority have moderate difficulty and large $\Delta\mathrm{success}$, whereas the
 top-ranked tasks by difficulty all have $\Delta\mathrm{success}=0$.
 
 \section{Discussion and Limitations}
@@ -788,7 +707,7 @@ reputational, safety, privacy, and regulatory harms, and the same bug
 may have different consequences in different production contexts. Our
 labels should therefore be interpreted as a coarse ordering of
 deployment harm, not as calibrated monetary costs. The framework in
-Eq.~\eqref{eq:budgetobj} naturally extends to richer cost models,
+Eq.~\ref{eq:budgetobj} naturally extends to richer cost models,
 including continuous costs or task-dependent cost vectors. The
 three-class version used here is intended as a minimal instantiation
 that current LLM judges and human annotators can apply reliably from
@@ -821,7 +740,7 @@ central question is also what happens if the model is wrong, and
 whether extra computation is likely to prevent that error.
 
 \bibliography{references}
-\bibliographystyle{iclr2026_conference}
+\bibliographystyle{plainnat}
 
 \appendix
 
