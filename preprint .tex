@@ -238,7 +238,7 @@ SWE-bench Lite tasks with \texttt{max\_new\_tokens}$=4096$, the thinking-charact
 count varies across tasks, but the rank correlation with consequence
 is negligible with $\rho(\mathrm{thinking}, \mathrm{cons}) = +0.002$. Hence, the allocation carries essentially no consequence signal.
 
-\textbf{Qwen3-VL-8B-Thinking\footnote{\url{https://huggingface.co/Qwen/Qwen3-VL-8B-Instruct}} (dedicated thinking).} This variant
+\textbf{Qwen3-VL-8B-Thinking\footnote{\url{https://huggingface.co/Qwen/Qwen3-VL-8B-Thinking}} (dedicated thinking).} This variant
 produces a separate reasoning stream under a configurable token budget.
 On the same 50 tasks with \texttt{max\_new\_tokens}$=8192$, $99.3\%$
 of tasks reach the token cap. Because almost all tasks are saturated,
