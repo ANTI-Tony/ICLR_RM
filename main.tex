@@ -1076,8 +1076,12 @@ We sample $60$ SWE-bench Lite tasks stratified by consequence and draw
 $8$ independent attempts per task; $48$ tasks ($20$/$17$/$11$ across
 classes $0$/$1$/$2$) received the full $8$ attempts and are used
 here. Each attempt is graded by the same LLM-judge as the main text.
-Compute is the number of attempts $k$, and best-of-$k$ success is
-``at least one of the first $k$ attempts is correct.''
+Compute is the number of attempts $k$. Following the oracle setup
+of the main experiments, best-of-$k$ success means ``at least one of
+the first $k$ attempts passes the judge,'' i.e. we assume an oracle
+verifier that selects a passing attempt when one exists; this is the
+$\mathrm{pass@}k$ upper bound on what attempt-based compute can
+achieve.
 
 \paragraph{Attempts is a real compute lever.} Best-of-$k$ pass rate
 rises from $\mathrm{pass@}1 = 0.125$ to $\mathrm{pass@}8 = 0.375$
@@ -1093,9 +1097,12 @@ compute helps least --- the within-model echo of the
 $\rho = -0.78$ result of \S\ref{sec:whyfail}.
 
 \paragraph{Consequence-aware allocation wins, model held fixed.}
-We allocate a fixed total attempts budget across the $48$ tasks ---
-half the tasks receive best-of-$8$, half receive a single attempt ---
-under each routing strategy, and measure cost-weighted loss
+We allocate a fixed total budget of $216$ attempts across the $48$
+tasks identically for every strategy: the top half of tasks (by the
+strategy's score) receive best-of-$8$ and the remaining half receive
+a single attempt ($24{\times}8 + 24{\times}1 = 216$). The strategies
+differ only in \emph{which} tasks are upgraded; the compute is the
+same. We measure cost-weighted loss
 (Table~\ref{tab:within}, Figure~\ref{fig:within}, right). The ordering
 exactly reproduces the cross-model main result: priority-aware
 ($-27.8\%$) and consequence-aware ($-25.0\%$) routing both
@@ -1111,9 +1118,10 @@ fixed agent.
 \centering
 \caption{\textbf{Within-model allocation} on $48$ SWE-bench Lite tasks
 with a single fixed Claude Sonnet~4.5 agent. Compute is the number of
-attempts (best-of-$k$); a fixed total attempts budget is allocated
-across tasks (half to best-of-$8$, half to a single attempt) under
-each strategy. $\mathcal{L}$ is cost-weighted loss (lower is better);
+oracle best-of-$k$ attempts; the same total budget of $216$ attempts
+($24$ tasks at best-of-$8$ $+$ $24$ at a single attempt) is allocated
+across tasks by each strategy, which differ only in which tasks are
+upgraded. $\mathcal{L}$ is cost-weighted loss (lower is better);
 ``$\Delta$ vs Diff'' is the relative reduction over the
 difficulty-aware baseline.}
 \label{tab:within}
@@ -1123,7 +1131,6 @@ difficulty-aware baseline.}
 Strategy & $\mathcal{L}$ & $\Delta$ vs Diff \\
 \midrule
 Difficulty-aware             & $36.0$ & ~~$0\%$ baseline \\
-Uniform (all $k{=}4$)        & $32.0$ & $+11.1\%$ \\
 Random                       & $30.0$ & $+16.7\%$ \\
 Consequence-aware (oracle)   & $27.0$ & $+25.0\%$ \\
 Priority-aware (oracle)      & $\mathbf{26.0}$ & $\mathbf{+27.8\%}$ \\
@@ -1138,7 +1145,7 @@ Priority-aware (oracle)      & $\mathbf{26.0}$ & $\mathbf{+27.8\%}$ \\
 \emph{Left:} best-of-$k$ pass rate rises with the number of attempts,
 giving real within-model compute headroom (overall
 $\mathrm{pass@}1 = 0.125 \to \mathrm{pass@}8 = 0.375$).
-\emph{Right:} at a fixed total attempts budget, allocating attempts by
+\emph{Right:} at a matched total budget of $216$ attempts, allocating attempts by
 consequence (or by priority) reduces cost-weighted loss well below the
 difficulty-aware baseline, which is itself worse than random ---
 reproducing the cross-model main result with the model held fixed.}
