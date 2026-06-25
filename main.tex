@@ -267,7 +267,7 @@ three contemporary reasoning models, each with a distinct compute-allocation
 mechanism, to measure whether their actual thinking length scales with
 the LLM-with-patch consequence label (Figure~\ref{fig:motivation}).
 
-\textbf{Qwen3-8B (hybrid thinking).} Qwen3-8B~\citep{qwen2025qwen3} alternates
+\textbf{Qwen3-8B\footnote{\url{https://huggingface.co/Qwen/Qwen3-8B}} (hybrid thinking).} Qwen3-8B alternates
 between ``thinking'' and ``direct'' modes via a control token. On 50
 SWE-bench Lite tasks with \texttt{max\_new\_tokens}$=4096$, the thinking-character
 count varies across tasks, but the rank correlation with consequence
@@ -280,7 +280,7 @@ On the same 50 tasks with \texttt{max\_new\_tokens}$=8192$, $99.3\%$
 of tasks reach the token cap. Because almost all tasks are saturated,
 there is no headroom for consequence-driven differentiation.
 
-\textbf{Claude Sonnet 4.5 with extended thinking.} We evaluate Claude~\citep{anthropic2025claude45}
+\textbf{Claude Sonnet 4.5\footnote{\url{https://www.anthropic.com/claude/sonnet}} with extended thinking.} We evaluate Claude
 with a 16,000-token extended-thinking budget on 171 stratified SWE-bench Lite tasks.
 Here, thinking length shows a statistically significant relationship
 with consequence: $\rho = +0.203$, $p = 0.008$. The effect is small:
@@ -772,14 +772,17 @@ solvers. This design allows us to compare many compute tiers on the
 same task set and to estimate per-task marginal gains from upgrading
 cheap models to premium models. However, it is still an offline
 compute-tier study rather than a fully controlled intervention on a
-single reasoning model. A complementary evaluation would vary the
-thinking-token budget of one fixed frontier model under the same
-allocation rule. Another complementary direction is to evaluate
-domains where high-consequence errors are more frequent, such as
-database operations, schema migrations, permission checks, and data
+single reasoning model. To rule out the concern that the advantage is
+specific to model-tier routing, Appendix~\ref{app:within} repeats the
+allocation experiment with a single fixed Claude Sonnet~4.5 agent,
+varying only test-time compute (best-of-$k$ attempts): the ordering is
+reproduced exactly --- consequence-aware and priority-aware routing
+beat the difficulty-aware baseline ($+25.0\%$ and $+27.8\%$), which is
+again worse than random. Another complementary direction is to
+evaluate domains where high-consequence errors are more frequent, such
+as database operations, schema migrations, permission checks, and data
 consistency bugs. These settings would test the same allocation
-principle under more controlled or more risk-heavy deployment
-conditions.
+principle under more risk-heavy deployment conditions.
 
 \textbf{Cost is a coarse scalar.} We represent consequence as an
 ordinal label in $\{0,1,2\}$. This is a deliberate simplification.
@@ -1130,5 +1133,103 @@ configuration). The replication of all four headline metrics across
 all four sub-domains rules out the alternative interpretation that
 the paper's results are an artefact of a particular topic mix in the
 benchmark.
+
+\section{Within-Model Allocation: Attempts as the Compute Lever}
+\label{app:within}
+
+The main allocation experiment (\S\ref{sec:exp}) varies compute by
+routing tasks across a $16$-model tier. A natural question is whether
+the advantage of consequence-aware allocation is specific to
+\emph{model-tier routing}, or whether it survives when the model is
+held fixed and only the test-time compute budget is varied. This
+appendix answers the latter: we fix a single agent and vary
+\emph{test-time compute alone}.
+
+\paragraph{Which compute lever.} Two within-model levers are natural:
+the thinking-token budget, and the number of attempts (best-of-$k$
+sampling). On SWE-bench Lite single-shot patches, the thinking-token
+budget \emph{saturates}: sweeping Claude Sonnet~4.5 from $1024$ to
+$16000$ thinking tokens leaves the pass rate flat (net
+$\Delta\mathrm{success} = -0.033$ from lowest to highest budget on a
+$30$-task pilot), so there is no within-model headroom to allocate.
+The number of attempts, in contrast, has real headroom: best-of-$k$
+pass rate rises monotonically with $k$. We therefore use attempts as
+the within-model compute lever.
+
+\paragraph{Setup.} We fix Claude Sonnet~4.5 with a single thinking
+budget of $4096$ tokens and temperature $1.0$ (extended thinking
+forces $\mathrm{temp}{=}1.0$, which also makes the attempts diverse).
+We sample $60$ SWE-bench Lite tasks stratified by consequence and draw
+$8$ independent attempts per task; $48$ tasks ($20$/$17$/$11$ across
+classes $0$/$1$/$2$) received the full $8$ attempts and are used
+here. Each attempt is graded by the same LLM-judge as the main text.
+Compute is the number of attempts $k$, and best-of-$k$ success is
+``at least one of the first $k$ attempts is correct.''
+
+\paragraph{Attempts is a real compute lever.} Best-of-$k$ pass rate
+rises from $\mathrm{pass@}1 = 0.125$ to $\mathrm{pass@}8 = 0.375$
+(Figure~\ref{fig:within}, left), a net within-model
+$\Delta\mathrm{success} = +0.25$ --- in sharp contrast to the
+$-0.033$ from the thinking-budget lever. The two orthogonality
+signatures of the main paper reappear at the within-model level:
+$\rho(\mathrm{consequence}, \Delta\mathrm{success}) = +0.22$ (n.s.,
+$p = 0.13$), so consequence does not predict where more attempts
+help; and $\rho(\mathrm{difficulty}, \Delta\mathrm{success}) = -0.25$
+($p = 0.08$), so the hardest tasks are again the ones where extra
+compute helps least --- the within-model echo of the
+$\rho = -0.78$ result of \S\ref{sec:whyfail}.
+
+\paragraph{Consequence-aware allocation wins, model held fixed.}
+We allocate a fixed total attempts budget across the $48$ tasks ---
+half the tasks receive best-of-$8$, half receive a single attempt ---
+under each routing strategy, and measure cost-weighted loss
+(Table~\ref{tab:within}, Figure~\ref{fig:within}, right). The ordering
+exactly reproduces the cross-model main result: priority-aware
+($-27.8\%$) and consequence-aware ($-25.0\%$) routing both
+substantially beat the difficulty-aware baseline, while
+difficulty-aware routing is again \emph{worse than random}. Because
+the model, prompt, and thinking budget are all held fixed and only the
+number of attempts is allocated, this rules out the interpretation
+that the paper's gains are an artefact of model-tier routing: the same
+advantage holds when consequence governs test-time compute on a single
+fixed agent.
+
+\begin{table}[h]
+\centering
+\caption{\textbf{Within-model allocation} on $48$ SWE-bench Lite tasks
+with a single fixed Claude Sonnet~4.5 agent. Compute is the number of
+attempts (best-of-$k$); a fixed total attempts budget is allocated
+across tasks (half to best-of-$8$, half to a single attempt) under
+each strategy. $\mathcal{L}$ is cost-weighted loss (lower is better);
+``$\Delta$ vs Diff'' is the relative reduction over the
+difficulty-aware baseline.}
+\label{tab:within}
+\small
+\begin{tabular}{lrr}
+\toprule
+Strategy & $\mathcal{L}$ & $\Delta$ vs Diff \\
+\midrule
+Difficulty-aware             & $36.0$ & ~~$0\%$ baseline \\
+Uniform (all $k{=}4$)        & $32.0$ & $+11.1\%$ \\
+Random                       & $30.0$ & $+16.7\%$ \\
+Consequence-aware (oracle)   & $27.0$ & $+25.0\%$ \\
+Priority-aware (oracle)      & $\mathbf{26.0}$ & $\mathbf{+27.8\%}$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\linewidth]{fig_within.pdf}
+\caption{\textbf{Within-model allocation with a single fixed agent.}
+\emph{Left:} best-of-$k$ pass rate rises with the number of attempts,
+giving real within-model compute headroom (overall
+$\mathrm{pass@}1 = 0.125 \to \mathrm{pass@}8 = 0.375$).
+\emph{Right:} at a fixed total attempts budget, allocating attempts by
+consequence (or by priority) reduces cost-weighted loss well below the
+difficulty-aware baseline, which is itself worse than random ---
+reproducing the cross-model main result with the model held fixed.}
+\label{fig:within}
+\end{figure}
 
 \end{document}
