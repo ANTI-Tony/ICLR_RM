@@ -426,7 +426,9 @@ model-tier price gaps on commercial APIs.
 
 \textbf{Strategies.} We compare seven allocation strategies under a
 matched total compute budget. Random routes a uniformly random
-top-$q\%$ subset of tasks to the premium tier. Difficulty-aware
+top-$q\%$ subset of tasks to the premium tier; it is averaged over
+$1{,}000$ random allocations at the same top-$25\%$ premium budget.
+Difficulty-aware
 (Snell-style) routes the top-$q\%$ by predicted
 difficulty~\citep{snell2024scaling}. Consequence-aware
 (predictor) routes the top-$q\%$ by the issue-only consequence
@@ -478,7 +480,7 @@ available when marginal gain can be estimated.}
 Strategy & $\mathcal{L}$ & $\Delta$ vs Diff & Accuracy \\
 \midrule
 Difficulty-aware (Snell-style)~\citep{snell2024scaling}              & $268.25$ & ~~$0\%$ baseline & $0.054$ \\
-Random                                                                & $233.00$ & $+13.1\%$ & $0.170$ \\
+Random (mean over $1{,}000$ draws)                                    & $231.20$ & $+13.8\%$ & $0.180$ \\
 \midrule
 Consequence-aware (Claude issue-only; cross-model)          & $220.50$ & $+17.8\%$ & $0.174$ \\
 Consequence-aware (Qwen issue-only; deployment-time)                        & $209.75$ & $+21.8\%$ & $0.184$ \\
@@ -532,12 +534,23 @@ potential value of marginal-gain estimation rather than as a fully
 deployment-time scheduler.
 
 
+\textbf{Statistical robustness.} Appendix~\ref{app:bootstrap} reports
+task-level bootstrap confidence intervals over $5{,}000$ resamples of
+the $300$ SWE-bench Lite tasks. The Qwen issue-only consequence router
+remains consistently better than difficulty-aware routing under this
+resampling analysis ($95\%$ CI $[+17.6\%, +25.5\%]$), and the ordering
+Consequence-aware $>$ Random $>$ Difficulty-aware holds in every
+resample. We further perform a leave-one-class-2-out analysis in
+Appendix~\ref{app:bootstrap} to verify that the gain is not driven by
+a single high-consequence task.
+
 \textbf{Difficulty-aware allocation is worse than random at the main
 operating point.} The most striking result in Table~\ref{tab:main} is
 that difficulty-aware routing underperforms the random baseline by
-$13.1\%$ at the top-$25\%$ premium budget. A top-$25\%$ selection
+$13.8\%$ on average at the top-$25\%$ premium budget. A top-$25\%$ selection
 ranked by difficulty captures $0\%$ of the cost-weighted gain available
-in the data. In contrast, random selection captures $24\%$,
+in the data. In contrast, random selection captures $25\%$
+on average,
 consequence-only oracle selection captures $43\%$, and priority-oracle
 selection captures $59\%$. This suggests that difficulty is not merely
 an incomplete routing signal under a cost-weighted objective; at this
@@ -663,7 +676,7 @@ routing, random routing, and finally difficulty-aware routing. At the
 top-$25\%$ premium operating point, a priority ranking captures
 $59\%$ of the total cost-weighted gain available in the data. A
 consequence-only ranking captures $43\%$, random selection captures
-$24\%$, and difficulty ranking captures $0\%$. The gap between
+$25\%$ on average, and difficulty ranking captures $0\%$. The gap between
 consequence-only and priority-aware routing is meaningful, but not
 transformative. This is consistent with the $+21.8\%$ versus
 $+30.7\%$ loss reduction observed in Table~\ref{tab:main}.
@@ -723,7 +736,10 @@ Eq.~\ref{eq:budgetobj} naturally extends to richer cost models,
 including continuous costs or task-dependent cost vectors. The
 three-class version used here is intended as a minimal instantiation
 that current LLM judges and human annotators can apply reliably from
-issue text and patches.
+issue text and patches. Appendix~\ref{app:costmap} verifies that the
+qualitative ordering of routing strategies remains stable under
+several monotone cost mappings, including $\{1,2,3\}$, $\{1,2,5\}$,
+and $\{1,3,10\}$.
 
 \textbf{Marginal-gain estimation.} The primary deployment-time
 scheduler in this paper uses only the issue-only consequence predictor.
@@ -922,6 +938,115 @@ primary signal in the main results because it is the labeling under
 which all four supporting analyses
 (\S\ref{sec:cons}, \S\ref{sec:pred}, \S\ref{sec:exp}, \S\ref{sec:whyfail})
 are jointly applicable on the full 300-task pool.
+
+\section{Statistical Robustness of Allocation Results}
+\label{app:bootstrap}
+
+This appendix quantifies the statistical stability of the allocation
+results in Table~\ref{tab:main}, which are computed on $300$ SWE-bench
+Lite tasks of which only $44$ are high-consequence. We report three
+complementary analyses: task-level bootstrap confidence intervals, the
+variability of the random baseline across allocation draws, and a
+leave-one-class-2-out analysis.
+
+\paragraph{Task-level bootstrap confidence intervals.} We resample the
+$300$ tasks with replacement $5{,}000$ times and recompute every
+strategy's cost-weighted loss and its relative reduction over
+difficulty-aware routing at the same top-$25\%$ matched-compute
+operating point. Table~\ref{tab:bootstrap} reports $95\%$ percentile
+intervals. Every consequence-based strategy improves on
+difficulty-aware routing in all $5{,}000$ resamples, and the ordering
+Consequence-aware (Qwen) $>$ Random $>$ Difficulty-aware, as well as
+Priority-aware $>$ Consequence-aware, holds in $100\%$ of resamples.
+For the Random row, the bootstrap resamples tasks while holding one
+representative allocation draw fixed; variability across allocation
+draws is quantified separately below.
+
+\begin{table}[h]
+\centering
+\caption{\textbf{Task-level bootstrap} over $5{,}000$ resamples of the
+$300$ SWE-bench Lite tasks at the top-$25\%$ matched-compute operating
+point. Point estimates match Table~\ref{tab:main}; intervals are
+$2.5$--$97.5$ percentile ranges over resamples.}
+\label{tab:bootstrap}
+\small
+\resizebox{\linewidth}{!}{%
+\begin{tabular}{lrrrr}
+\toprule
+Strategy & $\mathcal{L}$ & $95\%$ CI ($\mathcal{L}$) & $\Delta$ vs Diff & $95\%$ CI ($\Delta$) \\
+\midrule
+Difficulty-aware                                   & $268.25$ & $[249.2,\,286.8]$ & baseline   & --- \\
+Random (mean over $1{,}000$ draws)                 & $231.20$ & $[214.8,\,251.2]$ & $+13.8\%$  & $[+9.9\%,\,+16.2\%]$ \\
+Consequence-aware (Claude issue-only)              & $220.50$ & $[201.2,\,239.8]$ & $+17.8\%$  & $[+14.1\%,\,+21.5\%]$ \\
+Consequence-aware (Qwen issue-only)                & $209.75$ & $[190.8,\,230.0]$ & $+21.8\%$  & $[+17.6\%,\,+25.5\%]$ \\
+Consequence-aware (with-patch oracle)              & $205.75$ & $[187.0,\,223.8]$ & $+23.3\%$  & $[+19.2\%,\,+27.4\%]$ \\
+Priority-aware (Qwen + empirical marginal gain)    & $186.00$ & $[169.5,\,203.0]$ & $+30.7\%$  & $[+27.7\%,\,+33.4\%]$ \\
+Priority-aware (oracle + empirical marginal gain)  & $179.75$ & $[163.0,\,197.5]$ & $+33.0\%$  & $[+30.3\%,\,+35.4\%]$ \\
+\bottomrule
+\end{tabular}%
+}
+\end{table}
+
+\paragraph{Random baseline across allocation draws.} At the fixed task
+set, we draw $1{,}000$ independent random top-$25\%$ allocations. The
+cost-weighted loss has mean $231.20$, standard deviation $3.70$, and a
+$95\%$ interval of $[224.0,\,238.2]$; every one of the $1{,}000$ draws
+outperforms difficulty-aware routing ($268.25$). The Random row of
+Table~\ref{tab:main} therefore reports this mean rather than a single
+draw.
+
+\paragraph{Leave-one-class-2-out analysis.} Because cost-weighted loss
+depends strongly on the $44$ high-consequence tasks, we recompute the
+main strategies $44$ times, each time removing one class-2 task. The
+reduction over difficulty-aware routing for the Qwen issue-only
+consequence router stays within $[+21.5\%,\,+22.3\%]$ (mean
+$+21.9\%$) and beats difficulty-aware routing in all $44$ runs; the
+priority-aware variant stays within $[+30.3\%,\,+30.9\%]$ (mean
+$+30.7\%$), also winning in all $44$ runs. No single high-consequence
+task drives the result.
+
+\section{Cost-Mapping Sensitivity}
+\label{app:costmap}
+
+The main text maps the ordinal consequence classes $\{0,1,2\}$
+directly to scalar weights $\{0,1,2\}$ in the cost-weighted loss. This
+appendix verifies that the qualitative conclusions do not depend on
+this particular spacing. We recompute the matched-compute allocation
+comparison under five monotone cost mappings, applying each mapping
+consistently both to the loss weights and to the consequence-based
+routing scores. Table~\ref{tab:costmap} reports the results: under
+every mapping, the ordering Consequence-aware (Qwen) $>$ Random $>$
+Difficulty-aware and Priority-aware $>$ Consequence-aware is
+preserved. The Qwen issue-only router's reduction over
+difficulty-aware routing ranges from $+17.7\%$ (mapping $\{1,2,3\}$)
+to $+29.9\%$ (mapping $\{0,1,5\}$); steeper mappings, which weight
+high-consequence errors more heavily, generally favor
+consequence-based routing more strongly.
+
+\begin{table}[h]
+\centering
+\caption{\textbf{Cost-mapping sensitivity.} Cost-weighted loss (and
+reduction vs.\ difficulty-aware) at the top-$25\%$ matched-compute
+operating point under five monotone mappings of the consequence
+classes $\{0,1,2\}$ to scalar weights. The Random column uses one
+representative fixed draw for comparability across mappings. The
+strategy ordering is preserved under every mapping.}
+\label{tab:costmap}
+\small
+\resizebox{\linewidth}{!}{%
+\begin{tabular}{lrrrrrr}
+\toprule
+Mapping & Diff & Random & Cons-Qwen & Cons-oracle & Pri-Qwen & Pri-oracle \\
+\midrule
+$\{0,1,2\}$  & $268.2$  & $233.0$ & $209.8$ ($+21.8\%$) & $205.8$ ($+23.3\%$) & $186.0$ ($+30.7\%$) & $179.8$ ($+33.0\%$) \\
+$\{1,2,3\}$  & $552.0$  & $482.0$ & $454.5$ ($+17.7\%$) & $449.8$ ($+18.5\%$) & $398.2$ ($+27.9\%$) & $393.2$ ($+28.8\%$) \\
+$\{1,2,5\}$  & $634.0$  & $551.5$ & $497.5$ ($+21.5\%$) & $486.2$ ($+23.3\%$) & $448.2$ ($+29.3\%$) & $435.2$ ($+31.3\%$) \\
+$\{1,3,10\}$ & $1025.2$ & $888.8$ & $771.8$ ($+24.7\%$) & $746.8$ ($+27.2\%$) & $697.0$ ($+32.0\%$) & $672.8$ ($+34.4\%$) \\
+$\{0,1,5\}$  & $391.2$  & $337.2$ & $274.2$ ($+29.9\%$) & $260.5$ ($+33.4\%$) & $249.5$ ($+36.2\%$) & $236.5$ ($+39.6\%$) \\
+\bottomrule
+\end{tabular}%
+}
+\end{table}
 
 \section{Predictor Calibration Details}
 \label{app:predictor}
@@ -1160,6 +1285,14 @@ Priority-aware (oracle)      & $\mathbf{26.0}$ & $\mathbf{+27.8\%}$ \\
 \bottomrule
 \end{tabular}
 \end{table}
+
+A task-level bootstrap over the $48$ tasks ($5{,}000$ resamples)
+yields a $95\%$ confidence interval of $[+6.5\%,\,+44.1\%]$ for the
+consequence-aware reduction over difficulty-aware routing and
+$[+11.6\%,\,+47.2\%]$ for the priority-aware reduction; the
+reductions are positive in $99.8\%$ and $100\%$ of resamples
+respectively. The intervals are wide, as expected at $n{=}48$, but
+the within-model pattern is not driven by a single sampled task.
 
 \begin{figure}[h]
 \centering
