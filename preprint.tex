@@ -39,7 +39,9 @@ $^\ast$Corresponding authors
 \begin{abstract}
 Modern reasoning models can allocate different amounts of test-time computation, such as thinking tokens, model calls, or compute budget, to different tasks. Existing methods generally drive this allocation by predicted difficulty and spend more compute where it is expected to raise accuracy. This implicitly assumes that all failures cost the same, since an accuracy objective weights every task equally. However, such an assumption does not hold in deployment: A typo in a log message and a migration that corrupts a production database both count as one benchmark failure, but their real-world costs are fundamentally different. To fill this gap,
 we propose consequence-aware test-time compute allocation. Instead of routing compute only by predicted difficulty, we use a lightweight predictor to estimate from the issue text how costly a task would be if solved incorrectly. The scheduler then routes higher-consequence tasks to larger compute tiers or higher thinking budgets under the same total budget. We conduct main experiments on SWE-bench Lite and evaluate cross-dataset behavior on Multi-SWE-bench mini, covering
-700 software-engineering tasks in total. Our results reveal that consequence and difficulty are approximately orthogonal under various annotations, and that current thinking models do not allocate compute sufficiently according to consequence. Moreover, our issue-only predictor never misclassifies a high-consequence task as low-consequence across the 300 SWE-bench tasks. Under matched compute budgets, our consequence-aware scheduler reduces cost-weighted loss by 22\%–33\% relative to difficulty-aware routing; in particular, the priority-aware variant---which routes by per-task cost scaled by the marginal-utility signal---crosses 30\%, and its deployable predictor-driven version retains over 90\% of the oracle gain. Notably, difficulty-aware routing performs worse than random, as the hardest tasks are unsolvable at any tier.
+700 software-engineering tasks in total. Our results reveal that consequence and difficulty are approximately orthogonal under various annotations, and that current thinking models do not allocate compute sufficiently according to consequence. Moreover, our issue-only predictor never misclassifies a high-consequence task as low-consequence across the 300 SWE-bench tasks. 
+Under matched compute budgets, the fully deployment-time consequence-only scheduler reduces cost-weighted loss by $21.8\%$ relative to difficulty-aware routing and retains $93.6\%$ of the corresponding oracle gain. A priority-aware variant that additionally uses empirical marginal-gain information further reduces loss by $30.7\%$, showing the potential value of estimating where extra compute changes the outcome.
+Notably, difficulty-aware routing performs worse than random, because many of the hardest tasks remain unsolved even at the premium tier and therefore have low marginal return from extra compute.
 \end{abstract}
 
 \section{Introduction}
@@ -141,17 +143,19 @@ neither predictor misclassifies a high-consequence task as
 low-consequence, avoiding the most dangerous under-allocation error
 (\S\ref{sec:pred}).
 
-\item[(4)] \textbf{Consequence-aware routing improves cost-weighted
-allocation, and priority-aware routing improves it further.} Under
-matched compute on a $16$-model SWE-bench compute-tier benchmark,
-consequence-only routing substantially reduces cost-weighted loss
-relative to difficulty-aware routing. A priority-aware variant that
-combines predicted consequence with estimated marginal gain reduces
-cost-weighted loss by over $30\%$, while retaining over $90\%$ of the
-oracle gain. The same analysis also explains why difficulty-aware
-routing can underperform random: the hardest tasks often have the
-lowest marginal gain from extra compute, because they remain unsolved
-at every available tier (\S\ref{sec:exp}, \S\ref{sec:whyfail}).
+\item[(4)] \textbf{Deployment-time consequence routing improves
+cost-weighted allocation, and marginal-gain information improves it
+further.} Under matched compute on a $16$-model SWE-bench compute-tier
+benchmark, the Qwen issue-only consequence predictor reduces
+cost-weighted loss by $21.8\%$ relative to difficulty-aware routing and
+retains $93.6\%$ of the consequence-oracle gain. A priority-aware
+variant that additionally uses empirical marginal-gain information
+reduces loss by $30.7\%$, showing the further value of estimating where
+extra compute changes the outcome. The same analysis also explains why
+difficulty-aware routing can underperform random: the hardest tasks
+often have the lowest marginal gain from extra compute, because they
+remain unsolved at every available tier (\S\ref{sec:exp},
+\S\ref{sec:whyfail}).
 \end{itemize}
 
 \section{Related Work}
@@ -321,7 +325,7 @@ reference} on 300 SWE-bench Lite tasks. The deployment-critical ``never miss a h
 \resizebox{\linewidth}{!}{%
 \begin{tabular}{lccccc}
 \toprule
-Predictor & $\kappa$ & Class-2 recall & 2$\to$0 & 2$\to$1 & Severe (0$\leftrightarrow$2) \\
+Predictor & $\kappa$ & Class-2 recall & 2$\to$0 & 2$\to$1 & Low--high disagreement  \\
 \midrule
 Qwen3-8B issue-only (primary)
    & $\mathbf{0.572}$ & $\mathbf{88.6\%}$ \,($39/44$) & $\mathbf{0/44}$ & $5/44$  & $\mathbf{0.0\%}$ \,($0/300$) \\
@@ -433,16 +437,22 @@ top-$q\%$ subset of tasks to the premium tier. Difficulty-aware
 difficulty~\citep{snell2024scaling}. Consequence-aware
 (predictor) routes the top-$q\%$ by the issue-only consequence
 predictor of \S\ref{sec:pred}. We evaluate two predictor variants:
-the within-model Qwen predictor, which is our primary deployable
-variant, and the cross-model Claude predictor, which serves as a
-robustness check. Consequence-aware (oracle) replaces the
+the Qwen issue-only predictor, which is our primary deployment-time
+consequence predictor, and the cross-model Claude issue-only predictor,
+which serves as a robustness check. Consequence-aware (oracle) replaces the
 predictor with the LLM-with-patch label, isolating the upper bound of
-a one-signal consequence router. Finally, Priority-aware
-(predictor/oracle) routes the top-$q\%$ by
+a one-signal consequence router. Finally, Priority-aware variants route the top-$q\%$ by
 $\hat{c}(x) \cdot [p_{\mathrm{premium}}(x) -
 p_{\mathrm{cheap}}(x)]$. This two-signal variant accounts not only
-for the cost of an error, but also for whether premium compute is
-likely to change the outcome.
+for the cost of an error, but also for whether premium compute changes
+the outcome. Because the marginal-gain term
+$p_{\mathrm{premium}}(x)-p_{\mathrm{cheap}}(x)$ is computed from
+benchmark tier outcomes, we treat the priority-aware variants as
+analysis variants rather than fully deployment-time schedulers. A
+fully deployment-time priority-aware scheduler would require a
+marginal-gain predictor.
+
+
 
 \textbf{Metric.} We report cost-weighted loss
 \[
@@ -462,10 +472,11 @@ relative reduction over the difficulty-aware baseline, and average
 accuracy on $N{=}300$ SWE-bench Lite tasks. All strategies are evaluated
 at the same compute budget: top-$25\%$ premium routing with a
 cheap/premium price ratio of $1{:}4$. Difficulty-aware allocation is
-worse than Random at this operating point. The priority-aware Qwen
-predictor is the primary deployable variant and recovers $92.9\%$ of
-the priority-oracle gain. The simpler consequence-only Qwen predictor
-retains $93.6\%$ of its corresponding consequence-oracle gain.}
+worse than Random at this operating point. The Qwen issue-only consequence router is the primary deployment-time
+variant and retains $93.6\%$ of the corresponding consequence-oracle
+gain. The priority-aware rows additionally use empirical marginal-gain
+information and should be interpreted as an analysis of the extra value
+available when marginal gain can be estimated.}
 \label{tab:main}
 \small
 \begin{tabular}{lrrr}
@@ -475,12 +486,12 @@ Strategy & $\mathcal{L}$ & $\Delta$ vs Diff & Accuracy \\
 Difficulty-aware (Snell-style)~\citep{snell2024scaling}              & $268.25$ & ~~$0\%$ baseline & $0.054$ \\
 Random                                                                & $233.00$ & $+13.1\%$ & $0.170$ \\
 \midrule
-Consequence-aware (Claude predictor; cross-model robustness)          & $220.50$ & $+17.8\%$ & $0.174$ \\
-Consequence-aware (Qwen predictor; deployable)                        & $209.75$ & $+21.8\%$ & $0.184$ \\
-Consequence-aware (oracle)                                            & $205.75$ & $+23.3\%$ & $0.187$ \\
+Consequence-aware (Claude issue-only; cross-model)          & $220.50$ & $+17.8\%$ & $0.174$ \\
+Consequence-aware (Qwen issue-only; deployment-time)                        & $209.75$ & $+21.8\%$ & $0.184$ \\
+Consequence-aware (with-patch oracle)                                            & $205.75$ & $+23.3\%$ & $0.187$ \\
 \midrule
-Priority-aware (Qwen predictor; \textbf{primary deployable variant})  & $\mathbf{186.00}$ & $\mathbf{+30.7\%}$ & $\mathbf{0.274}$ \\
-Priority-aware (oracle; upper bound)                                  & $179.75$ & $+33.0\%$ & $0.278$ \\
+Priority-aware (Qwen consequence + empirical marginal gain)  & $\mathbf{186.00}$ & $\mathbf{+30.7\%}$ & $\mathbf{0.274}$ \\
+Priority-aware (oracle consequence + empirical marginal gain) & $179.75$ & $+33.0\%$ & $0.278$ \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -496,8 +507,9 @@ is dominated by the random baseline. This indicates that additional
 premium compute spent on the hardest tasks does not reliably reduce
 cost-weighted loss, because many of those tasks remain unsolved even
 at the premium tier. The priority-aware variants Pareto-dominate all
-others, and the Qwen-predictor-driven version closely tracks the
-oracle across the budget axis. The dotted vertical line marks the
+others, and the version using Qwen issue-only consequence together
+with empirical marginal gain closely tracks the corresponding oracle
+across the budget axis. The dotted vertical line marks the
 top-$25\%$ premium operating point used in Table~\ref{tab:main}.}
 \label{fig:pareto}
 \end{figure}
@@ -505,18 +517,26 @@ top-$25\%$ premium operating point used in Table~\ref{tab:main}.}
 \textbf{Consequence-aware allocation improves cost-weighted routing.}
 Table~\ref{tab:main} reports the main results at the top-$25\%$
 premium operating point, and Figure~\ref{fig:pareto} shows the full
-Pareto curve across compute budgets. The simplest deployable
-consequence-only router, driven by the Qwen issue-only predictor,
-reduces cost-weighted loss by $21.8\%$ relative to the difficulty-aware
-baseline. Its oracle counterpart, which uses the LLM-with-patch
-consequence label, reduces loss by $23.3\%$. Thus, the predictor
-retains $93.6\%$ of the consequence-oracle gain. When we additionally
-account for marginal gain, the priority-aware Qwen predictor reduces
-cost-weighted loss by $30.7\%$ at the same compute budget. The
-priority-aware oracle reduces loss by $33.0\%$, so the predictor
-retains $92.9\%$ of the priority-oracle gain. These results show that
-the safety-respecting predictor of \S\ref{sec:pred} translates
-directly into downstream routing quality.
+Pareto curve across compute budgets. The Qwen issue-only consequence router is the primary deployment-time
+variant. It reduces cost-weighted loss by $21.8\%$ relative to the
+difficulty-aware baseline. Its oracle counterpart, which uses the
+LLM-with-patch consequence label, reduces loss by $23.3\%$. Thus, the
+deployment-time predictor retains $93.6\%$ of the consequence-oracle
+gain. This confirms that the safety-respecting issue-only predictor of
+\S\ref{sec:pred} translates directly into downstream routing quality
+without access to gold patches or benchmark outcome statistics.
+
+\textbf{Empirical marginal-gain information improves routing further.}
+When we additionally multiply consequence by empirical marginal gain,
+the Qwen-based priority-aware variant reduces cost-weighted loss by
+$30.7\%$ at the same compute budget. The corresponding oracle reduces
+loss by $33.0\%$, so the Qwen consequence predictor retains $92.9\%$
+of the priority-oracle gain under this two-signal analysis. Because
+the marginal-gain term is computed from benchmark cheap- and
+premium-tier outcomes, we interpret this result as measuring the
+potential value of marginal-gain estimation rather than as a fully
+deployment-time scheduler.
+
 
 \textbf{Difficulty-aware allocation is worse than random at the main
 operating point.} The most striking result in Table~\ref{tab:main} is
@@ -536,10 +556,7 @@ decomposing consequence, difficulty, confidence, and marginal utility.
 
 The results of \S\ref{sec:exp} raise a natural question: Why does a
 strategy that allocates more compute to harder tasks perform worse than
-allocating randomly? We answer this question in two steps. First, we
-rule out the alternative interpretation that consequence is merely a
-re-skinning of cross-model disagreement, which is the signal that many
-confidence-based adaptive-compute methods already exploit. Second, we
+allocating randomly? We answer this question in two steps. First, we test the alternative interpretation that consequence is merely a re-skinning of cross-model disagreement, and find that consequence contributes substantial additional explanatory power. Second, we
 examine per-task marginal utility and show that difficulty is
 anti-correlated with where additional compute actually helps.
 
@@ -691,12 +708,10 @@ solvers. This design allows us to compare many compute tiers on the
 same task set and to estimate per-task marginal gains from upgrading
 cheap models to premium models. However, it is still an offline
 compute-tier study rather than a fully controlled intervention on a
-single reasoning model. To rule out the concern that the advantage is
-specific to model-tier routing, Appendix~\ref{app:within} repeats the
-allocation experiment with a single fixed Claude Sonnet~4.5 agent,
-varying only test-time compute (best-of-$k$ attempts): the ordering is
-reproduced exactly --- consequence-aware and priority-aware routing
-beat the difficulty-aware baseline ($+25.0\%$ and $+27.8\%$), which is
+single reasoning model. As controlled supporting evidence, Appendix~\ref{app:within} repeats
+the allocation experiment with a single fixed Claude Sonnet~4.5 agent,
+varying only test-time compute (oracle best-of-$k$ attempts). The same qualitative ordering is reproduced: consequence-aware and
+priority-aware routing beat the difficulty-aware baseline, which is
 again worse than random. Another complementary direction is to
 evaluate domains where high-consequence errors are more frequent, such
 as database operations, schema migrations, permission checks, and data
@@ -716,6 +731,16 @@ three-class version used here is intended as a minimal instantiation
 that current LLM judges and human annotators can apply reliably from
 issue text and patches.
 
+\textbf{Marginal-gain estimation.} The primary deployment-time
+scheduler in this paper uses only the issue-only consequence predictor.
+The priority-aware variants additionally use empirical marginal gain,
+computed from observed cheap- and premium-tier success rates in the
+benchmark. These variants measure the additional value available if
+marginal gain can be estimated at deployment time, but they are not
+fully deployment-time schedulers as implemented here. Learning such a
+marginal-gain predictor from issue text, model confidence, agent
+traces, or early attempts is an important direction for future work.
+
 \section{Conclusion}
 
 Adaptive test-time compute methods for reasoning models have largely
@@ -727,15 +752,11 @@ measurable, distinct from difficulty and confidence, predictable from
 issue text alone, and usable as a routing signal without retraining the
 reasoning model.
 
-On a 16-model SWE-bench compute-tier benchmark, consequence-only
-routing substantially reduces cost-weighted loss relative to a
-difficulty-aware baseline. A priority-aware variant that combines
-predicted consequence with estimated marginal gain reduces
-cost-weighted loss by over $30\%$, while a deployable predictor
-retains over $90\%$ of the corresponding oracle gain. We also find
-that difficulty-aware routing can underperform random allocation,
-because the hardest tasks often remain unsolved at every available
-tier and therefore have low marginal return from extra compute.
+On a 16-model SWE-bench compute-tier benchmark, the fully
+deployment-time consequence-only router reduces cost-weighted loss by
+$21.8\%$ relative to difficulty-aware routing. A priority-aware variant that additionally uses empirical marginal gain reaches a $30.7\%$ reduction, showing the potential value of
+estimating where extra compute changes the outcome. 
+We also find that difficulty-aware routing can underperform random allocation, because the hardest tasks often remain unsolved at every available tier and therefore have low marginal return from extra compute.
 
 These results suggest that test-time compute allocation should not be
 treated only as a question of task difficulty. For deployment, the
@@ -750,11 +771,12 @@ whether extra computation is likely to prevent that error.
 \section{Human-Label Robustness Check}
 \label{app:iaa}
 
-This appendix re-runs the two headline checks---F1 orthogonality
-(\S\ref{sec:cons}) and predictor agreement (\S\ref{sec:pred})---with
-the consequence label supplied by a human majority rather than by an
-LLM judge, as a construct-validity check on the labelings used in the
-main text.
+This appendix re-runs two headline checks---consequence--difficulty
+orthogonality (\S\ref{sec:cons}) and predictor agreement
+(\S\ref{sec:pred})---with consequence labels supplied by a human
+majority rather than by an LLM judge. The goal is to verify that the
+LLM-based labels used in the main text track a human-interpretable
+notion of deployment consequence.
 
 \paragraph{Study design.} We sampled $150$ unique tasks, stratified by
 the LLM-with-patch consequence label, drawn $75$ from SWE-bench Lite
@@ -829,12 +851,12 @@ four-labeling ablation.
 
 A natural reviewer concern is that the central results of the paper
 might be artefacts of the specific labeling pipeline used in the main
-text (LLM-with-patch). This appendix re-runs the two headline
-analyses---F1 orthogonality (\S\ref{sec:cons}) and the matched-compute
-allocation gain (\S\ref{sec:exp})---separately under each of the four
-labelings of the rubric, and shows the conclusions are stable.
+text (LLM-with-patch). This appendix re-runs two headline analyses---consequence--difficulty
+orthogonality (\S\ref{sec:cons}) and matched-compute allocation gain
+(\S\ref{sec:exp})---separately under each of the four labelings of the
+rubric, and shows that the conclusions are stable.
 
-\textbf{F1 orthogonality replicates under every labeling.}
+\textbf{Consequence--difficulty orthogonality replicates under every labeling.}
 Table~\ref{tab:abl-ortho} reports $\rho(\mathrm{consequence}, \mathrm{difficulty})$
 under the four labeling pipelines. None of the four correlations
 reaches significance at $\alpha = 0.05$, and all four are within
@@ -868,10 +890,9 @@ $\mathrm{cons}(x)$ used in computing the cost-weighted loss. The
 priority-aware oracle beats the difficulty-aware baseline by between
 $+30.8\%$ and $+36.3\%$ across all four labelings, with the human
 labels giving the largest improvement on the 75-task subset they
-cover. The paper's main claim (``the priority-aware variant achieves
-$30\%+$ reduction in cost-weighted loss'') is therefore not a
-property of the LLM-with-patch labeler specifically: it is a property
-of the rubric.
+cover. The robustness of the $30\%+$ priority-aware oracle gain is therefore
+not a property of the LLM-with-patch labeler specifically; it reflects
+the consequence rubric across multiple independent labelings.
 
 \begin{table}[h]
 \centering
@@ -900,8 +921,8 @@ Human majority (75 SWE tasks)      & $\phantom{0}75$  & $\phantom{0}75.8$  & $\p
 
 The fact that the rule-based labeler---which is just a hand-written
 lexical pattern matcher---and the human-majority labeler---which never
-sees an LLM---both yield $30\%+$ priority-aware improvements rules
-out the ``the gain is something the LLM judge invented'' interpretation. The
+sees an LLM---both yield $30\%+$ priority-aware improvements makes it
+unlikely that the gain is simply something the LLM judge invented. The
 remainder of the paper retains the LLM-with-patch label as the
 primary signal in the main results because it is the labeling under
 which all four supporting analyses
@@ -930,11 +951,12 @@ c{=}2 & 0   & 5   & 39 & 44  \\\hline
 \end{array}
 \]
 Per-class precision/recall/F1: class~0 ($0.81/0.78/0.80$), class~1
-($0.89/0.71/0.79$), class~2 ($0.46/0.89/0.61$). The Qwen predictor
-hits zero severe errors in both directions: $[2,0]=0$
-(no high-stakes task missed as low-stakes) and $[0,2]=0$
-(no low-stakes task escalated to high-stakes), giving an overall
-severe-error rate of $0/300 = 0.0\%$.
+($0.89/0.71/0.79$), class~2 ($0.46/0.89/0.61$). The deployment-critical severe under-allocation error is zero:
+$[2,0]=0$, meaning no high-consequence task is predicted as low
+consequence. The opposite extreme error is also zero, $[0,2]=0$,
+which means no low-consequence task is escalated to the highest
+consequence class. Thus, the total low--high disagreement rate is
+$0/300 = 0.0\%$.
 
 \textbf{Cross-model robustness predictor: Claude Sonnet~4.5
 issue-only.} Cohen's $\kappa = 0.379$; class-2 recall $= 52.3\%$
@@ -951,9 +973,11 @@ c{=}2 & 0 & 21 & 23 & 44 \\\hline
 Per-class precision/recall/F1: class~0 ($0.57/0.55/0.56$), class~1
 ($0.76/0.76/0.76$), class~2 ($0.48/0.52/0.50$). Despite a noticeably
 lower aggregate $\kappa$ than the within-model predictor, the
-class-2$\to$class-0 cell still holds at zero, and total severe
-errors in either direction sum to $2/300 = 0.7\%$, supporting
-the deployment-safety claim across model families.
+class-2$\to$class-0 cell still holds at zero. The two low--high
+disagreements occur in the conservative direction, class-0$\to$class-2:
+they may waste compute, but they do not under-allocate high-consequence
+tasks. This supports the conclusion that both predictors avoid the
+deployment-critical high-to-low error on this benchmark.
 
 \section{Per-Task Marginal Utility (Excerpt)}
 \label{app:marginal}
@@ -1005,11 +1029,11 @@ top-4 & $0$ & $1.00$ & $0.00$ & $0.00$ \\
 \label{app:subdomain}
 
 The 300-task SWE-bench Lite pool covers many distinct sub-domains
-(numeric computing, parsers, configuration, rendering, etc.). To check
-that the headline findings are not driven by any particular slice, we
-partition the pool by lexical signals in the issue text and re-run the
-orthogonality, predictor-calibration, and matched-compute allocation
-analyses inside each sub-domain. Table~\ref{tab:subdomain} reports
+(numeric computing, parsers, configuration, rendering, etc.). To check that the headline findings are not driven by any particular
+slice, we define heuristic sub-domain groups using lexical signals in
+the issue text and re-run the orthogonality, predictor-calibration,
+and matched-compute allocation analyses inside each reported group.
+Tasks that do not match these groups are left in a residual category. Table~\ref{tab:subdomain} reports
 four representative sub-domains that together cover $273$ of the $300$
 SWE-bench Lite tasks. In every sub-domain the same pattern holds:
 $\rho(\mathrm{consequence}, \mathrm{difficulty})$ stays close to zero,
@@ -1048,10 +1072,9 @@ Imports / modules / configuration    & $141$ & $-0.08$ & $0.53$ & $0$ & $+30.7\%
 The four sub-domains together cover the bulk of the SWE-bench Lite
 pool and span very different software-engineering settings (numerical
 algorithms, command-line parsing, visualisation, and package
-configuration). The replication of all four headline metrics across
-all four sub-domains rules out the alternative interpretation that
-the paper's results are an artefact of a particular topic mix in the
-benchmark.
+configuration). The replication of the headline pattern across these sub-domain groups
+makes it unlikely that the main results are driven by a single topic
+mix in the benchmark.
 
 \section{Within-Model Allocation: Attempts as the Compute Lever}
 \label{app:within}
@@ -1113,11 +1136,11 @@ same. We measure cost-weighted loss
 exactly reproduces the cross-model main result: priority-aware
 ($-27.8\%$) and consequence-aware ($-25.0\%$) routing both
 substantially beat the difficulty-aware baseline, while
-difficulty-aware routing is again \emph{worse than random}. Because
-the model, prompt, and thinking budget are all held fixed and only the
-number of attempts is allocated, this rules out the interpretation
-that the paper's gains are an artefact of model-tier routing: the same
-advantage holds when consequence governs test-time compute on a single
+difficulty-aware routing is again \emph{worse than random}. Because the model, prompt, and thinking budget are all held fixed and
+only the number of attempts is allocated, this provides controlled
+supporting evidence that the allocation advantage is not purely an
+artifact of routing across different model tiers. The same pattern
+appears when consequence governs test-time compute within a single
 fixed agent.
 
 \begin{table}[h]
