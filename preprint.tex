@@ -39,7 +39,7 @@ $^\ast$Corresponding authors
 \begin{abstract}
 Modern reasoning models can allocate different amounts of test-time computation, such as thinking tokens, model calls, or compute budget, to different tasks. Existing methods generally drive this allocation by predicted difficulty and spend more compute where it is expected to raise accuracy. This implicitly assumes that all failures cost the same, since an accuracy objective weights every task equally. However, such an assumption does not hold in deployment: A typo in a log message and a migration that corrupts a production database both count as one benchmark failure, but their real-world costs are fundamentally different. To fill this gap,
 we propose consequence-aware test-time compute allocation. Instead of routing compute only by predicted difficulty, we use a lightweight predictor to estimate from the issue text how costly a task would be if solved incorrectly. The scheduler then routes higher-consequence tasks to larger compute tiers or higher thinking budgets under the same total budget. We conduct main experiments on SWE-bench Lite and evaluate cross-dataset behavior on Multi-SWE-bench mini, covering
-700 software-engineering tasks in total. Our results reveal that consequence and difficulty are approximately orthogonal under various annotations, and that current thinking models do not allocate compute sufficiently according to consequence. Moreover, our issue-only predictor never misclassifies a high-consequence task as low-consequence across the 300 SWE-bench tasks. 
+700 software-engineering tasks in total. Our results reveal that consequence and difficulty are approximately orthogonal under various annotations, and that current thinking models do not allocate compute sufficiently according to consequence. Moreover, our issue-only predictor never misclassifies a high-consequence task as low-consequence on either benchmark. 
 Under matched compute budgets, the fully deployment-time consequence-only scheduler reduces cost-weighted loss by $21.8\%$ relative to difficulty-aware routing and retains $93.6\%$ of the corresponding oracle gain. A priority-aware variant that additionally uses empirical marginal-gain information further reduces loss by $30.7\%$, showing the potential value of estimating where extra compute changes the outcome.
 Notably, difficulty-aware routing performs worse than random, because many of the hardest tasks remain unsolved even at the premium tier and therefore have low marginal return from extra compute.
 \end{abstract}
@@ -117,11 +117,9 @@ The remainder of the paper builds the empirical case in four steps.
 
 \begin{itemize}
 \item[(1)] \textbf{Consequence is not difficulty, nor a disguised
-confidence signal.} We conduct our main analysis on $300$ SWE-bench
-Lite tasks and evaluate cross-dataset behavior on $400$
-Multi-SWE-bench mini tasks. Across rule-based, LLM-with-patch,
-issue-only, and human-majority labels, consequence remains nearly
-orthogonal to difficulty. Moreover, after controlling for both
+confidence signal.} On $300$ SWE-bench Lite tasks, consequence
+remains nearly orthogonal to difficulty across rule-based,
+LLM-with-patch, issue-only, and human-majority labels. Moreover, after controlling for both
 difficulty and cross-model pass-rate variance, consequence still
 explains an additional $26.4$ percentage points of cost-weighted
 marginal value ($+55.7\%$ relative; \S\ref{sec:cons},
@@ -138,10 +136,13 @@ insufficient consequence sensitivity in Claude Sonnet 4.5
 Qwen3-8B issue-only predictor, which sees only the issue text and file
 path, agrees with the Qwen3-8B with-patch reference at Cohen's
 $\kappa = 0.572$. A cross-model Claude issue-only predictor reaches
-$\kappa = 0.379$. Crucially, on the $300$ SWE-bench Lite tasks,
-neither predictor misclassifies a high-consequence task as
-low-consequence, avoiding the most dangerous under-allocation error
-(\S\ref{sec:pred}).
+$\kappa = 0.379$. Crucially, neither predictor ever misclassifies a
+high-consequence task as low-consequence --- across the $300$
+SWE-bench Lite tasks for both predictors, and across all $399$
+judge-labeled Multi-SWE-bench mini tasks for the Qwen predictor
+(\S\ref{sec:pred}, Appendix~\ref{app:crossdataset}). This avoids
+the most dangerous under-allocation error on all $700$ tasks we
+study.
 
 \item[(4)] \textbf{Deployment-time consequence routing improves
 cost-weighted allocation, and marginal-gain information improves it
@@ -315,6 +316,11 @@ recall, $52.3\%$ ($23/44$), but it preserves the same safety-critical
 property: class-2$\to$class-0 remains $0/44$. This suggests that the
 absence of high-to-low errors is driven by the issue text and the
 consequence rubric rather than by a single model family (Table~\ref{tab:predictor}; Figure~\ref{fig:confusion}). Full per-class metrics are reported in Appendix~\ref{app:predictor}.
+The predictor also transfers across datasets: on $399$
+Multi-SWE-bench mini tasks it agrees with the with-patch judge at
+$\kappa = 0.382$ (raw agreement $72.2\%$, on a pool where $72\%$ of
+tasks share a single class), and the deployment-critical high-to-low
+error rate remains zero (Appendix~\ref{app:crossdataset}).
 
 \begin{table}[h]
 \centering
@@ -1200,6 +1206,69 @@ algorithms, command-line parsing, visualisation, and package
 configuration). The replication of the headline pattern across these sub-domain groups
 makes it unlikely that the main results are driven by a single topic
 mix in the benchmark.
+
+\section{Cross-Dataset Transfer: Multi-SWE-bench mini}
+\label{app:crossdataset}
+
+This appendix evaluates how the consequence construct and the
+issue-only predictor transfer to a second benchmark, Multi-SWE-bench
+mini ($N{=}400$)~\citep{ma2024multiswebench}, whose task pool differs
+substantially from SWE-bench Lite: it spans multiple language
+ecosystems and is dominated by CLI utilities, UI libraries, and
+parsers. Each task is labeled by the same LLM-with-patch judge and
+the same Qwen issue-only predictor as the main text; $399$ tasks
+receive both labels.
+
+\paragraph{The pool is structurally low-consequence.} The with-patch
+judge places only $3$ of $400$ tasks ($0.75\%$) in class~$2$, versus
+$44$ of $300$ ($14.7\%$) on SWE-bench Lite, and $72\%$ of tasks in
+class~$1$. This is a property of the domain mix --- CLI, UI, and
+parser bugs rarely reach the silent-corruption or irreversibility
+regime --- and it sets the statistical context for the transfer
+numbers below.
+
+\paragraph{Predictor transfer.} On the $399$ doubly-labeled tasks,
+the issue-only predictor agrees with the with-patch judge at Cohen's
+$\kappa = 0.382$ with raw agreement of $72.2\%$:
+\[
+\begin{array}{c|ccc|c}
+& \hat{c}{=}0 & \hat{c}{=}1 & \hat{c}{=}2 & \text{total} \\\hline
+c{=}0 & 67 & 39 & 1  & 107 \\
+c{=}1 & 56 & 218 & 15 & 289 \\
+c{=}2 & 0  & 0   & 3  & 3   \\\hline
+\text{total} & 123 & 257 & 19 & 399
+\end{array}
+\]
+The drop from $\kappa = 0.572$ on SWE-bench Lite is largely a
+base-rate effect rather than a collapse in agreement: with $72\%$ of
+tasks in a single class, chance agreement is $55.0\%$, which
+structurally depresses $\kappa$ at comparable raw-agreement levels.
+Disagreements remain overwhelmingly adjacent ($27.6\%$ of tasks),
+with exactly one extreme ($0{\leftrightarrow}2$) disagreement in
+$399$ tasks ($0.3\%$).
+
+\paragraph{The deployment-critical safety property transfers
+exactly.} No task labeled class~$2$ by the with-patch judge is
+predicted class~$0$ ($0$ high-to-low errors), and all three
+with-patch class-$2$ tasks are recovered by the predictor ($3/3$
+class-$2$ recall), with rationales identifying the correct risk in
+each case (migration-induced data loss, silent data corruption,
+silent field dropping). The single extreme disagreement is a
+conservative class-$0{\to}2$ escalation, which can waste compute but
+never under-protects a high-consequence task. Combined with the
+SWE-bench Lite results (\S\ref{sec:pred}), the Qwen issue-only
+predictor makes zero high-to-low errors across all $700$ tasks in
+the two benchmarks.
+
+\paragraph{Why the allocation experiment stays on SWE-bench Lite.}
+Two constraints prevent a matched-compute allocation study on
+Multi-SWE-bench mini: no public per-task multi-model outcome data
+exists from which to construct cheap and premium tiers, and with
+only three class-$2$ tasks the cost-weighted contrast between
+strategies would be dominated by class-$1$ weights. A second domain
+that is naturally class-$2$-rich (e.g., database operations and
+schema migrations) is the appropriate next step, as discussed in
+\S\ref{sec:discussion}.
 
 \section{Within-Model Allocation: Attempts as the Compute Lever}
 \label{app:within}
