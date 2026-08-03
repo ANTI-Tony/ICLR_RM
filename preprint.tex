@@ -133,8 +133,8 @@ insufficient consequence sensitivity in Claude Sonnet 4.5
 (\S\ref{sec:audit}).
 
 \item[(3)] \textbf{Consequence can be predicted before solving.} A
-Qwen3-8B issue-only predictor, which sees only the issue text and file
-path, agrees with the Qwen3-8B with-patch reference at Cohen's
+Qwen2.5-7B-Instruct issue-only predictor, which sees only the issue text and file
+path, agrees with the Qwen2.5-7B-Instruct with-patch reference at Cohen's
 $\kappa = 0.572$. A cross-model Claude issue-only predictor reaches
 $\kappa = 0.379$. Crucially, neither predictor ever misclassifies a
 high-consequence task as low-consequence --- across the $300$
@@ -216,7 +216,7 @@ We first define consequence as a measurable property of a task, describe three i
 
 \textbf{Labeling pipelines.} Each task in SWE-bench Lite ($N{=}300$) and Multi-SWE-bench mini ($N{=}400$) is labeled via three independent pipelines:
 (i) A rule-based labeler using lexical patterns in file paths and gold patches (e.g., \texttt{delete}, \texttt{auth}, \texttt{migration}).
-(ii) An LLM-with-patch judge (Qwen3-8B) that observes issue text, gold patch, and modified files. This serves as the \textbf{primary} consequence label in our experiments because it can see the realized fix.
+(ii) An LLM-with-patch judge (Qwen2.5-7B-Instruct) that observes issue text, gold patch, and modified files. This serves as the \textbf{primary} consequence label in our experiments because it can see the realized fix.
 (iii) An LLM-issue-only predictor (\S\ref{sec:pred}) that reads only the issue text and file path, matching the information available to a deployment-time scheduler. It tests whether consequence can be predicted before solving the task.
 
 \textbf{Consequence is orthogonal to difficulty.} Difficulty is measured as $1-\overline{\mathrm{passrate}}$ across 16 public SWE-bench solvers, where
@@ -297,8 +297,8 @@ itself. We therefore ask whether consequence can be predicted from deployment-ti
 information, i.e., the
 issue text and file path alone, and whether such predictions are reliable to guide compute allocation.
 
-\textbf{Setup.} We remove the gold patch and modified-file content from the LLM-with-patch judge of \S\ref{sec:cons}. The input to the predictor contains only the GitHub issue text and the affected file path, matching the information available to a deployment-time scheduler. Our primary predictor is Qwen3-8B in issue-only mode, evaluated against the Qwen3-8B with-patch reference label. As a cross-model robustness check, we also evaluate Claude Sonnet 4.5 in
-issue-only mode against the same Qwen3-8B with-patch reference. Both predictors output an ordinal consequence label in $\{0,1,2\}$ with a single forward pass.
+\textbf{Setup.} We remove the gold patch and modified-file content from the LLM-with-patch judge of \S\ref{sec:cons}. The input to the predictor contains only the GitHub issue text and the affected file path, matching the information available to a deployment-time scheduler. Our primary predictor is Qwen2.5-7B-Instruct in issue-only mode, evaluated against the Qwen2.5-7B-Instruct with-patch reference label. As a cross-model robustness check, we also evaluate Claude Sonnet 4.5 in
+issue-only mode against the same Qwen2.5-7B-Instruct with-patch reference. Both predictors output an ordinal consequence label in $\{0,1,2\}$ with a single forward pass.
 
 \textbf{Agreement with the with-patch reference.} The primary Qwen
 issue-only predictor reaches Cohen's $\kappa = 0.572$ on all $300$ SWE-bench Lite tasks, indicating substantial agreement on a three-class ordinal labeling problem. The cross-model Claude issue-only predictor reaches $\kappa = 0.379$, lower than expected for a
@@ -333,7 +333,7 @@ reference} on 300 SWE-bench Lite tasks. The deployment-critical ``never miss a h
 \toprule
 Predictor & $\kappa$ & Class-2 recall & 2$\to$0 & 2$\to$1 & Low--high disagreement  \\
 \midrule
-Qwen3-8B issue-only (primary)
+Qwen2.5-7B-Instruct issue-only (primary)
    & $\mathbf{0.572}$ & $\mathbf{88.6\%}$ \,($39/44$) & $\mathbf{0/44}$ & $5/44$  & $\mathbf{0.0\%}$ \,($0/300$) \\
 Claude Sonnet~4.5 issue-only (cross-model)
    & $0.379$          & $52.3\%$ \,($23/44$)          & $\mathbf{0/44}$ & $21/44$ & $0.7\%$ \,($2/300$) \\
@@ -853,8 +853,8 @@ Lite tasks of this study.}
 Pipeline & $\kappa$ vs human majority \\
 \midrule
 Rule-based labeler                       & $0.223$ \\
-LLM-with-patch judge (Qwen3-8B)          & $0.500$ \\
-LLM-issue-only predictor (Qwen3-8B)      & $0.517$ \\
+LLM-with-patch judge (Qwen2.5-7B-Instruct) & $0.500$ \\
+LLM-issue-only predictor (Qwen2.5-7B-Instruct) & $0.517$ \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -897,8 +897,8 @@ under each of the four labelings.}
 Labeling pipeline & $n$ & $\rho$ & $p$ \\
 \midrule
 Rule-based                                  & $300$ & $+0.047$ & $0.42$ \\
-LLM-with-patch  (Qwen3-8B; paper primary)   & $300$ & $-0.096$ & $0.10$ \\
-LLM-issue-only  (Qwen3-8B predictor)        & $300$ & $-0.109$ & $0.06$ \\
+LLM-with-patch  (Qwen2.5-7B-Instruct; paper primary)   & $300$ & $-0.096$ & $0.10$ \\
+LLM-issue-only  (Qwen2.5-7B-Instruct predictor)        & $300$ & $-0.109$ & $0.06$ \\
 Human majority  (3-annotator study)         & $\phantom{0}75$  & $-0.066$ & $0.57$ \\
 \bottomrule
 \end{tabular}
@@ -1069,7 +1069,7 @@ LLM-with-patch reference on all $N{=}300$ SWE-bench Lite tasks. The
 class distribution of the with-patch reference is
 $\{0{:}60,\ 1{:}196,\ 2{:}44\}$.
 
-\textbf{Primary predictor: Qwen3-8B issue-only.} Cohen's
+\textbf{Primary predictor: Qwen2.5-7B-Instruct issue-only.} Cohen's
 $\kappa = 0.572$; class-2 recall $= 88.6\%$ ($39/44$). The confusion
 matrix is:
 \[
