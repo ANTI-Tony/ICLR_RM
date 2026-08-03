@@ -38,8 +38,8 @@ $^\ast$Corresponding authors
 
 \begin{abstract}
 Modern reasoning models can allocate different amounts of test-time computation, such as thinking tokens, model calls, or compute budget, to different tasks. Existing methods generally drive this allocation by predicted difficulty and spend more compute where it is expected to raise accuracy. This implicitly assumes that all failures cost the same, since an accuracy objective weights every task equally. However, such an assumption does not hold in deployment: A typo in a log message and a migration that corrupts a production database both count as one benchmark failure, but their real-world costs are fundamentally different. To fill this gap,
-we propose consequence-aware test-time compute allocation. Instead of routing compute only by predicted difficulty, we use a lightweight predictor to estimate from the issue text how costly a task would be if solved incorrectly. The scheduler then routes higher-consequence tasks to larger compute tiers or higher thinking budgets under the same total budget. We conduct main experiments on SWE-bench Lite and evaluate cross-dataset behavior on Multi-SWE-bench mini, covering
-700 software-engineering tasks in total. Our results reveal that consequence and difficulty are approximately orthogonal under various annotations, and that current thinking models do not allocate compute sufficiently according to consequence. Moreover, our issue-only predictor never misclassifies a high-consequence task as low-consequence on either benchmark. 
+we propose consequence-aware test-time compute allocation. Instead of routing compute only by predicted difficulty, we use a lightweight predictor to estimate from the issue text how costly a task would be if solved incorrectly. The scheduler then routes higher-consequence tasks to larger compute tiers or higher thinking budgets under the same total budget. We conduct main experiments on SWE-bench Lite, evaluate cross-dataset behavior on Multi-SWE-bench mini, and replicate the full allocation comparison on a disjoint database/ORM pool from SWE-bench Verified, covering
+840 software-engineering tasks in total. Our results reveal that consequence and difficulty are approximately orthogonal under various annotations, and that current thinking models do not allocate compute sufficiently according to consequence. Moreover, our issue-only predictor never misclassifies a high-consequence task as low-consequence on any of the three benchmarks. 
 Under matched compute budgets, the fully deployment-time consequence-only scheduler reduces cost-weighted loss by $21.8\%$ relative to difficulty-aware routing and retains $93.6\%$ of the corresponding oracle gain. A priority-aware variant that additionally uses empirical marginal-gain information further reduces loss by $30.7\%$, showing the potential value of estimating where extra compute changes the outcome.
 Notably, difficulty-aware routing performs worse than random, because many of the hardest tasks remain unsolved even at the premium tier and therefore have low marginal return from extra compute.
 \end{abstract}
@@ -84,9 +84,9 @@ routing observed later in the paper.}
 
 One might hope that sufficiently strong reasoning models already learn
 this distinction implicitly. If high-consequence tasks naturally induce
-longer reasoning traces, then an explicit cost signal would be unnecessary. We test this possibility directly in
-Figure~\ref{fig:motivation} by auditing three contemporary thinking
-models on SWE-bench Lite. The results show three different failure
+longer reasoning traces, then an explicit cost signal would be unnecessary. We test this possibility directly by
+auditing contemporary thinking models on SWE-bench Lite (three of
+which are shown in Figure~\ref{fig:motivation}). The results show three different failure
 modes. Qwen3-8B varies its thinking length, but that variation is
 essentially uncorrelated with consequence
 ($\rho = 0.002$). Qwen3-VL-8B-Thinking reaches its 8192-token cap on
@@ -95,7 +95,9 @@ Claude Sonnet 4.5 with extended thinking shows a statistically
 significant relationship between thinking length and consequence
 ($\rho = 0.20$, $p = 0.008$, $n = 171$), but the effect is small:
 high-consequence tasks receive only $20.5\%$ more thinking than
-low-consequence tasks.
+low-consequence tasks. The same pattern holds for OpenAI's o4-mini on
+the identical task sample ($\rho = 0.24$, $+31.4\%$ reasoning tokens
+for high- vs low-consequence tasks; \S\ref{sec:audit}).
 Thus, existing thinking models exhibit either no
 consequence signal, saturation, or only weak consequence sensitivity~\citep{liu2025efficientreasoning}.
 
@@ -127,10 +129,10 @@ marginal value ($+55.7\%$ relative; \S\ref{sec:cons},
 
 \item[(2)] \textbf{Existing thinking models are not sufficiently
 consequence-aware.} The audit in Figure~\ref{fig:motivation} reveals
-three distinct allocation patterns: no consequence signal in Qwen3-8B,
-near-universal saturation in Qwen3-VL-8B-Thinking, and weak but
-insufficient consequence sensitivity in Claude Sonnet 4.5
-(\S\ref{sec:audit}).
+distinct allocation failure patterns: no consequence signal in
+Qwen3-8B, near-universal saturation in Qwen3-VL-8B-Thinking, and weak
+but insufficient consequence sensitivity in both Claude Sonnet 4.5 and
+o4-mini (\S\ref{sec:audit}).
 
 \item[(3)] \textbf{Consequence can be predicted before solving.} A
 Qwen2.5-7B-Instruct issue-only predictor, which sees only the issue text and file
@@ -234,8 +236,11 @@ rule-based, LLM-with-patch, issue-only, and human-majority, the correlation stay
 \label{sec:audit}
 
 A key question is whether strong reasoning models already allocate
-compute by consequence on their own. We therefore audit three contemporary reasoning models, each with a distinct compute-allocation mechanism as shown in Figure~\ref{fig:motivation}, to measure whether their actual thinking length scales with
-the LLM-with-patch consequence label.
+compute by consequence on their own. We therefore audit contemporary
+reasoning models with distinct compute-allocation mechanisms
+(Figure~\ref{fig:motivation} shows the three open-weight and
+extended-thinking mechanisms), measuring whether actual thinking
+length scales with the LLM-with-patch consequence label.
 
 \textbf{Qwen3-8B\footnote{\url{https://huggingface.co/Qwen/Qwen3-8B}}  (hybrid thinking).} Qwen3-8B alternates
 between ``thinking'' and ``direct'' modes via a control token. On 50
@@ -259,7 +264,17 @@ value of extra compute (\S\ref{sec:exp}).  Claude thus shows a weak emergent ten
 toward consequence-aware allocation that is quantitatively inadequate for
 deployment.
 
-Across all three models, we observe distinct failure modes—no signal,
+\textbf{o4-mini\footnote{\url{https://platform.openai.com/docs/models/o4-mini}} (RL-trained reasoning API).} OpenAI's reasoning
+API does not expose chain-of-thought text, but it does report the
+per-request reasoning-token count, which is exactly the per-task
+compute quantity we audit. On the same frozen $171$-task sample used
+for Claude (direct comparability), o4-mini at its default reasoning
+effort reproduces the Claude pattern: a statistically significant but
+small consequence sensitivity ($\rho = +0.239$, $p = 0.002$), with
+class-$2$ tasks receiving $31.4\%$ more reasoning tokens than
+class-$0$ tasks ($4{,}022$ vs $3{,}060$ on average).
+
+Across the audited models, we observe distinct failure modes—no signal,
 saturation, or weak-but-insufficient consequence sensitivity. None
 allocates compute with sufficient sensitivity to realize the gains of
 consequence-aware allocation (Table~\ref{tab:audit}). This motivates
@@ -276,6 +291,7 @@ Model & $n$ & $\mathrm{max\_new}$ & $\rho(\text{thinking}, \text{cons})$ & $p$ &
 Qwen3-8B (hybrid)              & 50  & 4,096   & +0.002 & n.s.     & ---    & no signal \\
 Qwen3-VL-8B-Thinking           & 50  & 8,192   & ---     & ---      & ---    & 99.3\% saturated \\
 Claude Sonnet 4.5 (ext. think) & 171 & 16,000  & +0.203  & 0.008    & +20.5\% & weak but inadequate \\
+o4-mini (RL reasoning API)     & 171 & 12,000  & +0.239  & 0.002    & +31.4\% & weak but inadequate \\
 \bottomrule
 \end{tabular}%
 }
@@ -554,7 +570,10 @@ resampling analysis ($95\%$ CI $[+17.6\%, +25.5\%]$), and the ordering
 Consequence-aware $>$ Random $>$ Difficulty-aware holds in every
 resample. We further perform a leave-one-class-2-out analysis in
 Appendix~\ref{app:bootstrap} to verify that the gain is not driven by
-a single high-consequence task.
+a single high-consequence task. Finally, the entire strategy ordering
+replicates on a second, disjoint pool of $140$ database/ORM tasks
+from SWE-bench Verified with an independent $20$-model tier system
+(Appendix~\ref{app:seconddomain}).
 
 \textbf{Difficulty-aware allocation is worse than random at the main
 operating point.} The most striking result in Table~\ref{tab:main} is
@@ -731,11 +750,13 @@ single reasoning model. As controlled supporting evidence, Appendix~\ref{app:wit
 the allocation experiment with a single fixed Claude Sonnet~4.5 agent,
 varying only test-time compute (oracle best-of-$k$ attempts). The same qualitative ordering is reproduced: consequence-aware and
 priority-aware routing beat the difficulty-aware baseline, which is
-again worse than random. Another complementary direction is to
-evaluate domains where high-consequence errors are more frequent, such
-as database operations, schema migrations, permission checks, and data
-consistency bugs. These settings would test the same allocation
-principle under more risk-heavy deployment conditions.
+again worse than random. Appendix~\ref{app:seconddomain} further
+repeats the full allocation comparison on a consequence-rich pool of
+$140$ database/ORM tasks from SWE-bench Verified ($33.6\%$ class-$2$)
+with an independent $20$-model tier system, and the strategy ordering
+replicates exactly. Evaluating genuinely different application
+domains beyond software engineering (e.g., data analysis or
+operations tasks) remains future work.
 
 \textbf{Cost is a coarse scalar.} We represent consequence as an
 ordinal label in $\{0,1,2\}$. This is a deliberate simplification.
@@ -1265,10 +1286,108 @@ Two constraints prevent a matched-compute allocation study on
 Multi-SWE-bench mini: no public per-task multi-model outcome data
 exists from which to construct cheap and premium tiers, and with
 only three class-$2$ tasks the cost-weighted contrast between
-strategies would be dominated by class-$1$ weights. A second domain
-that is naturally class-$2$-rich (e.g., database operations and
-schema migrations) is the appropriate next step, as discussed in
-\S\ref{sec:discussion}.
+strategies would be dominated by class-$1$ weights. A second pool
+that is naturally class-$2$-rich is evaluated in
+Appendix~\ref{app:seconddomain}, where the full allocation
+comparison is repeated on $140$ database/ORM tasks from SWE-bench
+Verified.
+
+\section{A Second Task Pool: Database/ORM Tasks from SWE-bench Verified}
+\label{app:seconddomain}
+
+The allocation results of \S\ref{sec:exp} are computed on a single
+pool of $300$ SWE-bench Lite tasks. This appendix repeats the full
+matched-compute allocation comparison on a second, disjoint pool
+drawn from SWE-bench Verified: the $140$ \texttt{django/django}
+tasks whose issue text or touched files match database/ORM signals
+(migrations, schema, SQL, querysets, transactions, integrity
+constraints), after excluding every instance that overlaps the main
+$300$-task pool. Labels are produced by the same
+Qwen2.5-7B-Instruct with-patch judge and issue-only predictor as
+the main text, with byte-identical prompts. Compute tiers are built
+from $20$ public SWE-bench Verified leaderboard submissions
+(resolved counts $14$--$396$ of $500$, spanning 2023 RAG baselines
+to 2025 agent systems), with the bottom four as the cheap tier and
+the top four as the premium tier --- the same construction as
+\S\ref{sec:exp}, but with an entirely independent outcome dataset.
+This is a second pool within software engineering rather than a
+different application domain; its purpose is to test whether the
+allocation ordering replicates beyond the original task pool.
+
+\paragraph{The pool is consequence-rich, as predicted.} The
+with-patch judge places $47$ of $140$ tasks ($33.6\%$) in class~$2$,
+versus $14.7\%$ on the main pool --- confirming the expectation of
+\S\ref{sec:discussion} that data-heavy task pools concentrate
+high-consequence work. The full distribution is
+$\{0{:}8,\ 1{:}85,\ 2{:}47\}$.
+
+\paragraph{Predictor transfer.} The issue-only predictor agrees
+with the with-patch judge at Cohen's $\kappa = 0.582$ (raw agreement
+$75.7\%$), matching its $\kappa = 0.572$ on the main pool:
+\[
+\begin{array}{c|ccc|c}
+& \hat{c}{=}0 & \hat{c}{=}1 & \hat{c}{=}2 & \text{total} \\\hline
+c{=}0 & 8 & 0  & 0  & 8   \\
+c{=}1 & 4 & 53 & 28 & 85  \\
+c{=}2 & 0 & 2  & 45 & 47  \\\hline
+\text{total} & 12 & 55 & 73 & 140
+\end{array}
+\]
+Class-$2$ recall is $45/47$ ($95.7\%$) and the deployment-critical
+class-$2{\to}0$ cell is again empty. Across the three pools studied
+in this paper (SWE-bench Lite, Multi-SWE-bench mini, and this one),
+the predictor has yet to misclassify a single high-consequence task
+as low-consequence.
+
+\paragraph{The allocation ordering replicates exactly.}
+Table~\ref{tab:seconddomain} repeats the matched-compute comparison
+(top-$25\%$ premium routing; Random averaged over $1{,}000$ draws,
+std $3.34$, every draw beating difficulty-aware). The ordering is
+identical to Table~\ref{tab:main}: difficulty-aware is again the
+worst strategy --- below random --- and consequence- and
+priority-based routing recover the same relative gains on an
+independent pool with an independent tier system.
+
+\begin{table}[h]
+\centering
+\caption{\textbf{Second-pool allocation} on $140$ database/ORM tasks
+from SWE-bench Verified with a $20$-model tier system, at the
+top-$25\%$ matched-compute operating point. The strategy ordering of
+Table~\ref{tab:main} replicates exactly.}
+\label{tab:seconddomain}
+\small
+\begin{tabular}{lrr}
+\toprule
+Strategy & $\mathcal{L}$ & $\Delta$ vs Diff \\
+\midrule
+Difficulty-aware                            & $154.75$ & ~~$0\%$ baseline \\
+Random (mean over $1{,}000$ draws)          & $135.61$ & $+12.4\%$ \\
+Consequence-aware (Qwen2.5 issue-only)      & $131.75$ & $+14.9\%$ \\
+Consequence-aware (with-patch oracle)       & $121.00$ & $+21.8\%$ \\
+Priority-aware (pred $\times$ empirical marginal gain)   & $111.25$ & $+28.1\%$ \\
+Priority-aware (oracle $\times$ empirical marginal gain) & $\mathbf{106.00}$ & $\mathbf{+31.5\%}$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Consequence and difficulty are mildly correlated here ---
+and difficulty-aware routing still loses.} Unlike the main pool,
+this database-heavy slice shows a mild positive correlation
+$\rho(\mathrm{consequence}, \mathrm{difficulty}) = +0.204$
+($p = 0.016$): within database work, harder changes (schema
+migrations, transactional logic) do skew somewhat more consequential.
+This makes the pool a stress test for our thesis rather than a
+confirmation by construction --- and the result is instructive.
+Even with this correlation, difficulty-aware routing underperforms
+random by $12.4\%$, because the failure mechanism of
+\S\ref{sec:whyfail} is domain-general:
+$\rho(\mathrm{difficulty}, \Delta\mathrm{success}) = -0.377$
+($p < 0.001$) on this pool, so the hardest tasks remain the ones
+premium compute cannot save. The advantage of consequence-aware
+allocation therefore does not depend on strict
+consequence--difficulty orthogonality; it depends on consequence
+tracking where errors are expensive while difficulty tracks where
+compute is wasted.
 
 \section{Within-Model Allocation: Attempts as the Compute Lever}
 \label{app:within}
@@ -1298,7 +1417,9 @@ forces $\mathrm{temp}{=}1.0$, which also makes the attempts diverse).
 We sample $60$ SWE-bench Lite tasks stratified by consequence and draw
 $8$ independent attempts per task; $48$ tasks ($20$/$17$/$11$ across
 classes $0$/$1$/$2$) received the full $8$ attempts and are used
-here. Each attempt is graded by the same LLM-judge as the main text.
+here. Each attempt is graded by a Claude Sonnet~4.5 automated judge
+that compares the candidate patch against the gold patch (judge
+robustness is checked at the end of this appendix).
 Compute is the number of attempts $k$. Following the oracle setup
 of the main experiments, best-of-$k$ success means ``at least one of
 the first $k$ attempts passes the judge,'' i.e. we assume an oracle
@@ -1368,6 +1489,20 @@ $[+11.6\%,\,+47.2\%]$ for the priority-aware reduction; the
 reductions are positive in $99.8\%$ and $100\%$ of resamples
 respectively. The intervals are wide, as expected at $n{=}48$, but
 the within-model pattern is not driven by a single sampled task.
+
+\paragraph{Judge robustness.} The attempt verdicts above come from a
+single Claude judge. To rule out judge-specific artifacts, we re-grade
+all $396$ attempts with a judge from a different model family
+(\texttt{deepseek-chat}) under the identical judging prompt. The two
+judges agree on $91.3\%$ of attempts (Cohen's $\kappa = 0.630$),
+with the DeepSeek judge somewhat stricter (pass rate $0.115$ vs
+$0.156$). Recomputing the full allocation comparison under the
+DeepSeek verdicts --- on the $46$ tasks for which all eight attempts
+were graded --- preserves the ordering exactly: difficulty-aware
+$39.0$, random $34.0$, consequence-aware $31.0$ ($+20.5\%$),
+priority-aware $30.0$ ($+23.1\%$), with difficulty-aware again worse
+than random. The within-model conclusion does not depend on which
+model grades the attempts.
 
 \begin{figure}[h]
 \centering
