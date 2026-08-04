@@ -503,7 +503,8 @@ $p_{\mathrm{premium}}(x)-p_{\mathrm{cheap}}(x)$ is computed from
 benchmark tier outcomes, we treat the priority-aware variants as
 analysis variants rather than fully deployment-time schedulers. A
 fully deployment-time priority-aware scheduler would require a
-marginal-gain predictor.
+marginal-gain predictor; prompted marginal-gain predictors do not
+reliably close this gap (Appendix~\ref{app:marginal}).
 
 
 
@@ -839,11 +840,18 @@ and $\{1,3,10\}$.
 scheduler in this paper uses only the issue-only consequence predictor.
 The priority-aware variants additionally use empirical marginal gain,
 computed from observed cheap- and premium-tier success rates in the
-benchmark. These variants measure the additional value available if
-marginal gain can be estimated at deployment time, but they are not
-fully deployment-time schedulers as implemented here. Learning such a
-marginal-gain predictor from issue text, model confidence, agent
-traces, or early attempts is an important direction for future work.
+benchmark; they are analysis upper bounds, not deployable schedulers.
+We tested the most accessible deployment-time route --- prompting two
+model families to forecast cheap-tier and frontier-tier success from
+the issue text (Appendix~\ref{app:marginal}): absolute success levels
+are moderately predictable ($\rho$ up to $+0.39$), but their
+difference, the marginal gain, is not ($|\rho| < 0.07$, n.s., in
+all family$\times$pool combinations), and the resulting
+deployment-time priority scheduler does not reliably beat
+consequence-only routing. Estimating the value of additional
+computation appears to be the genuinely hard half of the problem;
+learning it from execution feedback, model confidence, agent traces,
+or early attempts remains an important direction for future work.
 
 \section{Conclusion}
 
@@ -1142,6 +1150,46 @@ $\{0,1,5\}$  & $391.2$  & $337.2$ & $274.2$ ($+29.9\%$) & $260.5$ ($+33.4\%$) & 
 }
 \end{table}
 
+\paragraph{Continuous severity weights.} The mappings above are still
+three-level. To test whether the conclusions depend on discretization
+at all, we elicited a rubric-anchored \emph{continuous} severity score
+($0$--$100$) for every task, with the gold patch visible, from two
+judge families (\texttt{deepseek-chat} and GPT-4o), on both SWE
+pools. The continuous scores track the ordinal label
+($\rho = 0.38$--$0.49$ across the four judge$\times$pool
+combinations) and each other (cross-judge Spearman $0.50$ on Lite,
+$0.40$ on Verified), and correlate with difficulty only mildly
+($\rho$ between $-0.11$ and $+0.36$). Re-running the full allocation
+comparison with the continuous scores as \emph{both} the loss weights
+and the oracle routing signal --- while the deployment-time route
+remains the unchanged ordinal issue-only predictor --- preserves the
+complete strategy ordering in all four combinations
+(Table~\ref{tab:contcost}). The paper's conclusions are not an
+artifact of the three-class discretization.
+
+\begin{table}[h]
+\centering
+\caption{\textbf{Allocation under continuous $0$--$100$ severity
+weights} from two independent judge families, both pools
+(reduction vs.\ difficulty-aware routing; deployment route = ordinal
+issue-only predictor throughout). The discrete-table ordering is
+preserved in every combination.}
+\label{tab:contcost}
+\small
+\resizebox{\linewidth}{!}{%
+\begin{tabular}{llrrrrr}
+\toprule
+Pool & Weights & Random & Cons-pred & Cons-oracle$_{\mathrm{cont}}$ & Pri-pred & Pri-oracle$_{\mathrm{cont}}$ \\
+\midrule
+Lite & deepseek-chat & $+13.1\%$ & $+16.7\%$ & $+20.6\%$ & $+25.3\%$ & $+31.5\%$ \\
+Lite & GPT-4o        & $+13.9\%$ & $+17.8\%$ & $+20.8\%$ & $+27.6\%$ & $+30.7\%$ \\
+Verified & deepseek-chat & $+12.5\%$ & $+14.2\%$ & $+18.7\%$ & $+26.4\%$ & $+30.9\%$ \\
+Verified & GPT-4o        & $+13.7\%$ & $+13.8\%$ & $+22.6\%$ & $+25.2\%$ & $+30.1\%$ \\
+\bottomrule
+\end{tabular}%
+}
+\end{table}
+
 \section{Predictor Calibration Details}
 \label{app:predictor}
 
@@ -1237,6 +1285,33 @@ top-4 & $0$ & $1.00$ & $0.00$ & $0.00$ \\
 \bottomrule
 \end{tabular}
 \end{table}
+
+\paragraph{Can marginal gain be predicted before solving?} The
+priority signal needs $\Delta\mathrm{success}(x)$, which the paper
+treats as posterior. We tested the most accessible deployment-time
+route: prompting two model families (\texttt{deepseek-chat} and
+GPT-4o) to forecast, from the issue text and file path alone, the
+success probability of a mid-tier agent ($\hat{p}_{\mathrm{basic}}$)
+and of a frontier system ($\hat{p}_{\mathrm{frontier}}$), with
+$\hat{\Delta} = \hat{p}_{\mathrm{frontier}} -
+\hat{p}_{\mathrm{basic}}$, on both SWE pools. The \emph{levels} are
+moderately predictable: $\rho(\hat{p}_{\mathrm{basic}},
+p_{\mathrm{cheap}})$ reaches $+0.22$ to $+0.39$ (all significant)
+across the four family$\times$pool combinations. The
+\emph{difference} is not: $\rho(\hat{\Delta}, \Delta)$ lies between
+$-0.07$ and $+0.05$ (n.s.) in all four combinations and for the
+two-family ensemble on both pools. Consequently the fully
+deployment-time priority scheduler
+($\hat{c} \times \hat{\Delta}$) does not reliably improve on
+consequence-only routing: on Lite it recovers between $-9\%$ and
+$+3\%$ of the cons-pred$\to$pri-oracle headroom; on Verified it
+recovers $+18\%$ to $+36\%$, but with $\hat{\Delta}$ uncorrelated
+with the true gain this cannot be attributed to genuine marginal-gain
+prediction (on that pool $\hat{\Delta}$ correlates with difficulty,
+$\rho$ up to $+0.43$, and appears to act through the level
+estimates). Estimating \emph{where extra compute changes the
+outcome} is the genuinely hard half of the priority objective ---
+consequence-only routing remains our deployable recommendation.
 
 \section{Robustness Across Sub-Domains}
 \label{app:subdomain}
