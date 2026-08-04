@@ -91,7 +91,10 @@ significant relationship between thinking length and consequence
 high-consequence tasks receive only $20.5\%$ more thinking than
 low-consequence tasks. The same pattern holds for OpenAI's o4-mini on
 the identical task sample ($\rho = 0.24$, $+31.4\%$ reasoning tokens
-for high- vs low-consequence tasks; \S\ref{sec:audit}).
+for high- vs low-consequence tasks), while DeepSeek-R1 saturates even
+a $24{,}000$-token reasoning budget on $54\%$ of the same tasks, with
+no significant consequence signal in which tasks saturate
+(\S\ref{sec:audit}).
 Thus, existing thinking models exhibit either no
 consequence signal, saturation, or only weak consequence sensitivity~\citep{liu2025efficientreasoning}.
 
@@ -122,9 +125,11 @@ marginal value ($+55.7\%$ relative; \S\ref{sec:cons},
 \S\ref{sec:whyfail}).
 
 \item[(2)] \textbf{Existing thinking models are not sufficiently
-consequence-aware.} The audit in Figure~\ref{fig:motivation} reveals
+consequence-aware.} The audit in \S\ref{sec:audit} (with three of the
+mechanisms shown in Figure~\ref{fig:motivation}) reveals
 distinct allocation failure patterns: no consequence signal in
-Qwen3-8B, near-universal saturation in Qwen3-VL-8B-Thinking, and weak
+Qwen3-8B, near-universal saturation in Qwen3-VL-8B-Thinking, majority
+saturation in DeepSeek-R1 even at a $24{,}000$-token budget, and weak
 but insufficient consequence sensitivity in both Claude Sonnet 4.5 and
 o4-mini (\S\ref{sec:audit}).
 
@@ -268,6 +273,20 @@ small consequence sensitivity ($\rho = +0.239$, $p = 0.002$), with
 class-$2$ tasks receiving $31.4\%$ more reasoning tokens than
 class-$0$ tasks ($4{,}022$ vs $3{,}060$ on average).
 
+\textbf{DeepSeek-R1\footnote{\url{https://api-docs.deepseek.com/guides/reasoning_model}} (open chain-of-thought API).} R1 returns its
+full reasoning stream, so length is directly observable. On the same
+frozen $171$-task sample, R1 exhibits the saturation failure mode at
+frontier scale: it truncates mid-reasoning on $92\%$ of tasks under
+an $8{,}192$-token budget, and still on $54\%$ of tasks when the
+budget is raised to $24{,}000$ tokens, with the median task consuming
+essentially the entire budget in every consequence class. With most
+tasks pinned at the cap there is little headroom for
+consequence-driven differentiation, and no statistically significant
+consequence signal is detectable either in \emph{which} tasks
+saturate ($\rho = +0.13$, $p = 0.10$; class-$2$ tasks saturate at
+$68\%$ vs $50\%$ for class-$0$) or in the reasoning lengths of the
+$79$ tasks that stop on their own ($\rho = +0.16$, $p = 0.16$).
+
 Across the audited models, we observe distinct failure modes—no signal,
 saturation, or weak-but-insufficient consequence sensitivity. None
 allocates compute with sufficient sensitivity to realize the gains of
@@ -286,6 +305,7 @@ Qwen3-8B (hybrid)              & 50  & 4,096   & +0.002 & n.s.     & ---    & no
 Qwen3-VL-8B-Thinking           & 50  & 8,192   & ---     & ---      & ---    & 99.3\% saturated \\
 Claude Sonnet 4.5 (ext. think) & 171 & 16,000  & +0.203  & 0.008    & +20.5\% & weak but inadequate \\
 o4-mini (RL reasoning API)     & 171 & 12,000  & +0.239  & 0.002    & +31.4\% & weak but inadequate \\
+DeepSeek-R1 (open CoT API)     & 171 & 24,000  & ---     & ---      & ---    & 54\% saturated (92\% at 8,192) \\
 \bottomrule
 \end{tabular}%
 }
