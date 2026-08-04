@@ -296,9 +296,14 @@ $79$ tasks that stop on their own ($\rho = +0.16$, $p = 0.16$).
 Across the audited models, we observe distinct failure modes—no signal,
 saturation, or weak-but-insufficient consequence sensitivity. None
 allocates compute with sufficient sensitivity to realize the gains of
-consequence-aware allocation (Table~\ref{tab:audit}). This motivates
-the following question: how should a deployer wrap a reasoning model
-so that it allocates compute effectively by consequence?
+consequence-aware allocation (Table~\ref{tab:audit}). These audits are
+observational and use a single prompt template per model; different
+framings could shift absolute thinking lengths. The consistency of the
+pattern across five models, three allocation mechanisms, and two length
+measures, however, makes a prompt-specific artifact unlikely. This
+motivates the following question: how should a deployer wrap a
+reasoning model so that it allocates compute effectively by
+consequence?
 
 \begin{table}[h]
 \centering
@@ -1521,8 +1526,13 @@ construct boundary: the Qwen judge places only $3/150$ questions
 silent-persistence channel of code (a wrong \texttt{SELECT} cannot
 corrupt state), while a GPT-4o second opinion places $29.3\%$ in
 class~$2$, reading stakes off the domain (it assigns class~$2$ to
-every medical, toxicological, and financial query). The two judges
-agree at only $\kappa = 0.133$. In code, where the rubric was
+every medical, toxicological, and financial query), and a
+\texttt{deepseek-chat} opinion falls between the two ($16.7\%$
+class-$2$; $\kappa = 0.348$ against the Qwen judge, versus
+$\kappa = 0.133$ for GPT-4o). The severity thresholds thus spread
+far more widely across judges here than in code, although the
+ordering is again conserved: no judge demotes any of the Qwen
+judge's class-$2$ questions. In code, where the rubric was
 developed, cross-judge disagreement is threshold-only
 (Appendix~\ref{app:judge2}); in a new domain the construct itself
 needs re-grounding --- a limitation we flag for consequence labeling
