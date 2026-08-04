@@ -1616,14 +1616,46 @@ appendix answers the latter: we fix a single agent and vary
 
 \paragraph{Which compute lever.} Two within-model levers are natural:
 the thinking-token budget, and the number of attempts (best-of-$k$
-sampling). On SWE-bench Lite single-shot patches, the thinking-token
-budget \emph{saturates}: sweeping Claude Sonnet~4.5 from $1024$ to
-$16000$ thinking tokens leaves the pass rate flat (net
-$\Delta\mathrm{success} = -0.033$ from lowest to highest budget on a
-$30$-task pilot), so there is no within-model headroom to allocate.
-The number of attempts, in contrast, has real headroom: best-of-$k$
-pass rate rises monotonically with $k$. We therefore use attempts as
-the within-model compute lever.
+sampling). We evaluated the budget lever on \emph{two model families
+with opposite budget mechanics}, on the same $80$-task stratified
+sample ($27$/$27$/$26$ across classes), grading every generation with
+two judges from different families (agreement $\kappa = 0.650$; a
+generation counts as correct only when both agree).
+
+\emph{Soft budget (Claude Sonnet~4.5).} Claude's
+\texttt{budget\_tokens} is a ceiling, not a target: the model always
+answers, and rarely exhausts the budget. Sweeping
+$\{1024, 2048, 4096, 8192, 16000\}$ ($400$ streamed generations,
+zero truncation), median thinking length grows only ${\sim}3\times$
+for a $16\times$ budget increase, and the pass rate stays flat
+($0.100$/$0.064$/$0.100$/$0.150$/$0.100$), with net
+$\Delta\mathrm{success}(1024{\to}16000) = 0.000$ exactly ($3$ tasks
+flip up, $3$ down) --- sharpening the $-0.033$ estimate of our
+earlier $30$-task pilot.
+
+\emph{Hard cap (DeepSeek-R1).} The DeepSeek API exposes no soft
+budget; the only deployer-side control is a hard output cap, under
+which unfinished reasoning yields no answer at all. Sweeping caps
+$\{4096, 8192, 16000, 24000\}$ ($320$ generations), the cap is a
+real but brutal lever: $99\%$/$91\%$/$80\%$/$58\%$ of tasks
+truncate, and success rises monotonically
+$1/80 \to 2/80 \to 5/80 \to 7/80$ ($0.013 \to 0.025 \to 0.063 \to
+0.088$; $\Delta = +0.075$, six tasks flip up, none down) --- yet
+remains at most $8.8\%$ at the largest cap and is exactly zero for class-$2$ tasks at every cap.
+
+\emph{Budget-level allocation is degenerate in both families.}
+Re-running the matched-compute strategy comparison on these real
+budget outcomes (half the tasks at the highest level, half at the
+lowest) puts every strategy within $3\%$ of the difficulty-aware
+baseline on Claude and within $1.3\%$ on R1: when a lever offers no usable headroom, no
+routing signal can exploit it --- the same boundary-condition logic
+as Appendix~\ref{app:ood}. Notably,
+$\rho(\mathrm{difficulty}, \Delta\mathrm{success}) = -0.33$
+($p = 0.003$) reappears on the R1 cap lever: the hardest tasks again
+benefit least from extra compute. The number of attempts, in
+contrast, has real headroom: best-of-$k$ pass rate rises
+monotonically with $k$. We therefore use attempts as the
+within-model compute lever.
 
 \paragraph{Setup.} We fix Claude Sonnet~4.5 with a single thinking
 budget of $4096$ tokens and temperature $1.0$ (extended thinking
@@ -1645,7 +1677,7 @@ achieve.
 rises from $\mathrm{pass@}1 = 0.125$ to $\mathrm{pass@}8 = 0.375$
 (Figure~\ref{fig:within}, left), a net within-model
 $\Delta\mathrm{success} = +0.25$ --- in sharp contrast to the
-$-0.033$ from the thinking-budget lever. The two orthogonality
+the flat thinking-budget lever above. The two orthogonality
 signatures of the main paper reappear at the within-model level:
 $\rho(\mathrm{consequence}, \Delta\mathrm{success}) = +0.22$ (n.s.,
 $p = 0.13$), so consequence does not predict where more attempts
