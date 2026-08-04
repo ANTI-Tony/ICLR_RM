@@ -49,13 +49,14 @@ Notably, difficulty-aware routing performs worse than random, because many of th
 
 Modern reasoning models, such as OpenAI's o-series, DeepSeek-R1,
 Anthropic's Claude with extended thinking, and Qwen3-Thinking, can decide
-how much test-time computation to spend on each input~\citep{li2025reasoningllms}. In practice, they
+how much test-time computation to spend on each input~\citep{li2025reasoningllms,liu2025efficientreasoning}. In practice, they
 vary how long they think from task to task, often producing longer
-reasoning traces on inputs that appear more difficult~\citep{alomrani2025reasoningbudget,zhu2025adaptivethinking}. The same principle
+reasoning traces on inputs that appear more difficult~\citep{alomrani2025reasoningbudget,zhu2025adaptivethinking,pan2025slowthinking}. The same principle
 is pursued explicitly in adaptive test-time compute, where learned
 routers~\citep{damani2024learning}, compute-difficulty scaling
-laws~\citep{snell2024scaling}, and confidence-driven early
-stopping~\citep{manvi2024adaptive} differ in mechanism but follow a common
+laws~\citep{snell2024scaling}, self-assessment-driven early
+stopping~\citep{manvi2024adaptive}, and budgeted verifier-call
+scheduling~\citep{qu2026adaptivetesttime} differ in mechanism but follow a common
 rule, namely that harder tasks deserve more compute.
 
 
@@ -63,7 +64,7 @@ This principle is natural for benchmarks that optimize average accuracy under a 
 
 This deployment mismatch exposes a missing term in current LLM adaptive-compute objectives. The closest prior framing is rational metareasoning~\citep{russell1991right, hay2012selecting,
 yang2024rational}, which treats computation as an action whose value
-depends on its expected utility. From this perspective, additional reasoning is useful only when the expected reduction in downstream loss exceeds the cost of computation~\citep{alomrani2025reasoningbudget,sayin2025rethinking}. Modern LLM implementations of adaptive compute, however, typically collapse this utility term into a uniform accuracy objective~\citep{li2025reasoningllms}. We therefore move beyond difficulty-aware allocation and cast consequence-aware allocation as a cost-weighted problem: for each task, a scheduler should choose a compute tier that trades off the price of additional computation against the expected consequence-weighted error~\citep{qu2026adaptivetesttime}. When all tasks have equal error cost, this objective reduces to standard accuracy maximization under a compute budget~\citep{alomrani2025reasoningbudget}. When error costs vary, however, difficulty alone is no longer a sufficient routing signal.
+depends on its expected utility. From this perspective, additional reasoning is useful only when the expected reduction in downstream loss exceeds the cost of computation~\citep{alomrani2025reasoningbudget}. Modern LLM implementations of adaptive compute, however, typically collapse this utility term into a uniform accuracy objective~\citep{li2025reasoningllms}. We therefore move beyond difficulty-aware allocation and cast consequence-aware allocation as a cost-weighted problem: for each task, a scheduler should choose a compute tier that trades off the price of additional computation against the expected consequence-weighted error. When all tasks have equal error cost, this objective reduces to standard accuracy maximization under a compute budget~\citep{alomrani2025reasoningbudget}. When error costs vary, however, difficulty alone is no longer a sufficient routing signal.
 
 \begin{figure}[t]
 \centering
@@ -90,7 +91,7 @@ which are shown in Figure~\ref{fig:motivation}). The results show three differen
 modes. Qwen3-8B varies its thinking length, but that variation is
 essentially uncorrelated with consequence
 ($\rho = 0.002$). Qwen3-VL-8B-Thinking reaches its 8192-token cap on
-$99.3\%$ of tasks, leaving almost no room for task-specific allocation~\citep{pan2025slowthinking}.
+$99.3\%$ of tasks, leaving almost no room for task-specific allocation.
 Claude Sonnet 4.5 with extended thinking shows a statistically
 significant relationship between thinking length and consequence
 ($\rho = 0.20$, $p = 0.008$, $n = 171$), but the effect is small:
@@ -102,12 +103,14 @@ a $24{,}000$-token reasoning budget on $54\%$ of the same tasks, with
 no significant consequence signal in which tasks saturate
 (\S\ref{sec:audit}).
 Thus, existing thinking models exhibit either no
-consequence signal, saturation, or only weak consequence sensitivity~\citep{liu2025efficientreasoning}.
+consequence signal, saturation, or only weak consequence sensitivity.
 
 Motivated by this gap, we propose consequence-aware test-time
 compute allocation.
-The method separates two decisions that are often
-conflated~\citep{shirkavand2025costaware}.
+The method separates two decisions that are often conflated ---
+existing cost-aware routing prices the \emph{compute} side of the
+trade-off~\citep{shirkavand2025costaware}, while the cost of
+\emph{errors} is left uniform.
 First, a lightweight predictor estimates the deployment-time
 cost of an error directly from the issue text, before the task is
 solved.
@@ -140,9 +143,9 @@ but insufficient consequence sensitivity in both Claude Sonnet 4.5 and
 o4-mini (\S\ref{sec:audit}).
 
 \item[(3)] \textbf{Consequence can be predicted before solving.} A
-Qwen2.5-7B-Instruct issue-only predictor, which sees only the issue text and file
+Qwen2.5-7B-Instruct~\citep{qwen2025qwen25} issue-only predictor, which sees only the issue text and file
 path, agrees with the Qwen2.5-7B-Instruct with-patch reference at Cohen's
-$\kappa = 0.572$. A cross-model Claude issue-only predictor reaches
+$\kappa = 0.572$~\citep{cohen1960kappa}. A cross-model Claude issue-only predictor reaches
 $\kappa = 0.379$. Crucially, neither predictor ever misclassifies a
 high-consequence task as low-consequence --- across the $300$
 SWE-bench Lite tasks for both predictors, and across all $399$
@@ -170,10 +173,11 @@ remain unsolved at every available tier (\S\ref{sec:exp},
 
 \textbf{Adaptive test-time compute.}
 A growing body of work studies how much computation a language model
-should spend on each input. \citet{snell2024scaling} analyze how the effectiveness of different test-time scaling strategies, and derive difficulty-dependent compute-optimal policies for using a fixed inference budget. \citet{damani2024learning}
+should spend on each input. \citet{snell2024scaling} analyze the effectiveness of different test-time scaling strategies and derive difficulty-dependent compute-optimal policies for using a fixed inference budget. \citet{damani2024learning}
 train a reward predictor to allocate compute according to expected
-accuracy gain. \citet{manvi2024adaptive} use token-level confidence
-to stop generation early when the model is already confident. Although
+accuracy gain. \citet{manvi2024adaptive} train models to predict mid-generation
+whether further compute would improve the answer, enabling early
+stopping. Although
 these methods differ in implementation, they share the same underlying
 objective: spend compute where it is expected to improve average
 accuracy. Our work asks a complementary question. When two tasks have
@@ -223,7 +227,7 @@ We first define consequence as a measurable property of a task, describe three i
 
 \textbf{Labeling pipelines.} Each task in SWE-bench Lite ($N{=}300$) and Multi-SWE-bench mini ($N{=}400$) is labeled via three independent pipelines:
 (i) A rule-based labeler using lexical patterns in file paths and gold patches (e.g., \texttt{delete}, \texttt{auth}, \texttt{migration}).
-(ii) An LLM-with-patch judge (Qwen2.5-7B-Instruct) that observes issue text, gold patch, and modified files. This serves as the \textbf{primary} consequence label in our experiments because it can see the realized fix.
+(ii) An LLM-with-patch judge (Qwen2.5-7B-Instruct~\citep{qwen2025qwen25}) that observes issue text, gold patch, and modified files. This serves as the \textbf{primary} consequence label in our experiments because it can see the realized fix.
 (iii) An LLM-issue-only predictor (\S\ref{sec:pred}) that reads only the issue text and file path, matching the information available to a deployment-time scheduler. It tests whether consequence can be predicted before solving the task.
 
 \textbf{Consequence is orthogonal to difficulty.} Difficulty is measured as $1-\overline{\mathrm{passrate}}$ across 16 public SWE-bench solvers, where
@@ -597,8 +601,8 @@ resample. We further perform a leave-one-class-2-out analysis in
 Appendix~\ref{app:bootstrap} to verify that the gain is not driven by
 a single high-consequence task. Finally, the entire strategy ordering
 replicates on a second, disjoint pool of $140$ database/ORM tasks
-from SWE-bench Verified with an independent $20$-model tier system
-(Appendix~\ref{app:seconddomain}), and every qualitative conclusion
+from SWE-bench Verified~\citep{openai2024swebenchverified} with an
+independent $20$-model tier system (Appendix~\ref{app:seconddomain}), and every qualitative conclusion
 survives replacing the labeling judge with a different model family
 (Appendix~\ref{app:judge2}).
 
@@ -765,7 +769,7 @@ to consequence weights at all in its mechanism
 persists under all five cost mappings of Appendix~\ref{app:costmap}
 and under labels produced by an independent judge from a different
 model family (Appendix~\ref{app:judge2}). Third, any deployed
-scheduler must adopt \emph{some} error-cost weighting; uniform
+scheduler must adopt \emph{some} error-cost weighting~\citep{sayin2025rethinking}; uniform
 weighting is itself a choice --- the one implicitly made by
 accuracy-maximizing allocation --- and our results quantify what that
 implicit choice forgoes when real error costs are heterogeneous.
@@ -806,7 +810,7 @@ $140$ database/ORM tasks from SWE-bench Verified ($33.6\%$ class-$2$)
 with an independent $20$-model tier system, and the strategy ordering
 replicates exactly. Appendix~\ref{app:ood} further probes a
 non-software domain --- business-database analytics (BIRD
-text-to-SQL) --- with a fully end-to-end pipeline (live two-tier
+text-to-SQL~\citep{li2023bird}) --- with a fully end-to-end pipeline (live two-tier
 inference, execution grading, predictor routing), finding that the
 framework's predictions track the domain's cost structure: the pool
 lacks the cost heterogeneity and the negative difficulty--gain
@@ -1453,7 +1457,8 @@ All consequence labels in the main text are produced by
 Qwen2.5-7B-Instruct. A natural concern is that the allocation results
 might encode idiosyncrasies of this particular judge. We therefore
 re-label both SWE pools with a judge from a different model family
-(\texttt{deepseek-chat}), applying the byte-identical with-patch
+(\texttt{deepseek-chat}, DeepSeek-V3~\citep{deepseekai2024v3}),
+applying the byte-identical with-patch
 rubric prompt, and then recompute the full allocation comparison
 using the second judge's labels as \emph{both} the loss weights and
 the oracle routing signal. The issue-only predictor remains the
@@ -1509,7 +1514,8 @@ consequence of a plausible-but-wrong result; class~$2$ covers results
 that feed medical, financial, toxicological, or eligibility
 decisions), and the same Qwen2.5-7B-Instruct produces with-gold judge
 labels and question-only predictor labels. The cheap tier is
-GPT-4o-mini and the premium tier is o4-mini, three independent
+GPT-4o-mini~\citep{openai2024gpt4o} and the premium tier is o4-mini,
+three independent
 samples per task per tier ($900$ live generations, all terminating
 naturally; median o4-mini reasoning length $320$ tokens), graded by
 the official BIRD protocol (set equality of executed result rows).
