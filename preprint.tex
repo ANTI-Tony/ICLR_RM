@@ -1948,27 +1948,30 @@ reductions are positive in $99.8\%$ and $100\%$ of resamples
 respectively. The intervals are wide, as expected at $n{=}48$, but
 the within-model pattern is not driven by a single sampled task.
 
-\paragraph{Scaled sample.} To tighten these intervals we extended the
-sample with $75$ additional stratified tasks generated under the
+\paragraph{Scaled sample.} To tighten these intervals we extended
+the sample with $84$ additional stratified tasks generated under the
 identical protocol ($8$ attempts each, same model, budget, and
-prompts), and graded the full pool with the independent
-\texttt{deepseek-chat} judge (the same judge used for the
-cross-judge check below; a symmetric Claude-judged grading of the
-extension is pending). On the $115$ tasks with all eight verdicts
-($43$/$45$/$27$ across classes), the complete ordering holds:
-difficulty-aware $86.00$ (worst) $<$ random $82.45$ ($+4.1\%$) $<$
-consequence-aware (issue-only predictor) $77.00$ ($+10.5\%$) $<$
-consequence-oracle $76.00$ ($+11.6\%$) $<$ priority $74.00$--$75.00$
-($+12.8\%$ to $+14.0\%$). The task-level bootstrap ($5{,}000$
-resamples) is now informative: the deployment-time consequence
-reduction is $+10.5\%$ with $95\%$ CI $[+1.3, +20.8]$, positive in
-$98.6\%$ of resamples; the priority reduction is $+14.4\%$ with CI
-$[+5.6, +24.7]$, positive in $100\%$; and difficulty-aware routing
-loses to random in $89.9\%$ of draws. The margins are smaller than
-in the $48$-task Claude-judged table --- the stricter judge lowers
-pass rates and the added tasks dilute the class-$2$ share --- but
-every qualitative conclusion survives at more than double the sample
-size with a judge from a different model family.
+prompts) --- bringing every remaining class-$2$ task in the pool into
+the sample --- and graded the full pool with \emph{both} judge
+families. Under the Claude judge ($n{=}127$ tasks with all eight
+verdicts; $46$/$46$/$35$ across classes), the complete ordering
+holds: difficulty-aware $102.00$ (worst) $<$ random $91.92$
+($+9.9\%$) $<$ consequence-aware $83.00$--$85.00$ (issue-only
+predictor $+18.6\%$, oracle $+16.7\%$) $<$ priority $77.00$
+($+24.5\%$); difficulty-aware loses to random in $100\%$ of
+$1{,}000$ draws. The task-level bootstrap ($5{,}000$ resamples) is
+now informative: the deployment-time consequence reduction is
+$+20.2\%$ with $95\%$ CI $[+10.5, +30.7]$ and the priority
+reduction $+24.7\%$ with CI $[+14.6, +35.6]$, both positive in
+$100\%$ of resamples. Under the stricter \texttt{deepseek-chat}
+judge ($n{=}126$) the same ordering holds with smaller margins
+(consequence-predictor $+8.7\%$, bootstrap mean $+10.1\%$ with CI
+$[+2.0, +19.2]$, positive in
+$99.2\%$; priority $+13.5\%$, positive in $100\%$; difficulty-aware
+below random in $93.5\%$ of draws). At $2.6\times$ the original
+sample size, under two judge families, every qualitative conclusion
+of this appendix survives with confidence intervals bounded away
+from zero.
 
 \paragraph{Judge robustness.} The attempt verdicts above come from a
 single Claude judge. To rule out judge-specific artifacts, we re-grade
