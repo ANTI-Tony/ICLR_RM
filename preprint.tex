@@ -909,9 +909,9 @@ scheduler in this paper uses only the issue-only consequence predictor.
 The priority-aware variants additionally use empirical marginal gain,
 computed from observed cheap- and premium-tier success rates in the
 benchmark; they are analysis upper bounds, not deployable schedulers.
-We tested the most accessible deployment-time route --- prompting two
-model families to forecast cheap-tier and frontier-tier success from
-the issue text (Appendix~\ref{app:marginal}): absolute success levels
+We tested the two most accessible deployment-time routes --- prompted
+forecasts from two model families, and a learned embedding probe with
+task-level cross-validation (Appendix~\ref{app:marginal}): absolute success levels
 are moderately predictable ($\rho$ up to $+0.39$), but their
 difference, the marginal gain, is not ($|\rho| < 0.07$, n.s., in
 all family$\times$pool combinations), and the resulting
@@ -1412,8 +1412,22 @@ with the true gain this cannot be attributed to genuine marginal-gain
 prediction (on that pool $\hat{\Delta}$ correlates with difficulty,
 $\rho$ up to $+0.43$, and appears to act through the level
 estimates). Estimating \emph{where extra compute changes the
-outcome} is the genuinely hard half of the priority objective ---
-consequence-only routing remains our deployable recommendation.
+outcome} is the genuinely hard half of the priority objective.
+A \emph{learned} probe fares no better than prompting: ridge
+regression on issue-text embeddings (OpenAI
+\texttt{text-embedding-3-small}, $10$-fold task-level
+cross-validation, out-of-fold predictions only) reaches
+$\rho(\hat{\Delta}, \Delta) = +0.11$ on Lite ($p = 0.06$) and
+$+0.13$ on Verified (n.s.), with AUC for detecting $\Delta > 0$ at
+$0.49$ and $0.34$ --- chance level and below --- and zero transfer
+across pools ($\rho = -0.04$ for Lite$\to$Verified). Plugging the
+out-of-fold $\hat{\Delta}$ into the priority score recovers only
+$+4\%$ of the cons-pred$\to$pri-oracle headroom on Lite. With
+$n = 440$ labeled tasks this does not rule out that a larger-scale
+learned predictor could succeed, but text-side prediction of
+marginal gain has now failed under both prompting (two families) and
+learning (embedding probe) --- consequence-only routing remains our
+deployable recommendation.
 
 \section{Robustness Across Sub-Domains}
 \label{app:subdomain}
@@ -1973,6 +1987,27 @@ sample size, under two judge families, every qualitative conclusion
 of this appendix survives with confidence intervals bounded away
 from zero.
 
+\paragraph{A first dynamic policy.} The scheduler evaluated so far is
+static: it fixes each task's attempt budget before any attempt is
+made. The cached attempt-level outcomes also let us evaluate
+\emph{sequential} policies offline: attempts are issued one at a
+time, a task stops early at its first success (the same
+oracle-verifier assumption as best-of-$k$), and otherwise continues
+up to a cap $k_{\max}$ set by the routing signal --- so the dynamic
+signal is \emph{execution feedback} (an observed failed attempt), the
+one signal our predictability analyses (Appendix~\ref{app:marginal})
+suggest is informative. Realized compute is the number of attempts
+actually consumed. Consequence-gated caps dominate: under the Claude
+judge, a deployment-time profile ($k_{\max} = 2/8/8$ by predicted
+class) matches the loss of uniform best-of-$8$ while consuming
+$20\%$ fewer attempts ($623$ vs $778$), and the oracle-gated version
+saves $28\%$; under the deepseek judge the savings are $13\%$ and
+$29\%$. Difficulty-gated caps never match the uniform-$8$ loss at
+any lower budget under either judge. This directly addresses the
+one-shot-decision limitation: the framework extends to in-flight
+escalation decisions, with consequence determining \emph{how long to
+keep trying} and execution feedback supplying the dynamic signal.
+
 \paragraph{Judge robustness.} The attempt verdicts above come from a
 single Claude judge. To rule out judge-specific artifacts, we re-grade
 all $396$ attempts with a judge from a different model family
@@ -2000,5 +2035,53 @@ difficulty-aware baseline, which is itself worse than random ---
 reproducing the cross-model main result with the model held fixed.}
 \label{fig:within}
 \end{figure}
+
+\section{Context-Conditional Consequence}
+\label{app:context}
+
+The severity of an identical code error depends on where the code is
+deployed: a wrong value returned by an API is an annoyance in a
+hobby project and a catastrophe in a safety-critical system. Our
+labels so far condition only on the repository itself. This appendix
+makes deployment context a \emph{first-class input}:
+$\mathrm{cons}(x) \to \mathrm{cons}(x, \mathrm{context})$, where the
+deployer declares the context in one sentence.
+
+\paragraph{Setup.} For $100$ stratified SWE-bench Lite tasks we
+elicit continuous severity ($0$--$100$) under four declared
+deployment contexts --- a personal hobby project, an internal
+business tool with human review, a payment-processing service, and a
+safety-critical industrial control system --- from two judge
+families (\texttt{deepseek-chat} and GPT-4o), in both the
+with-patch judge mode and the issue-only predictor mode
+($1{,}600$ labels in total).
+
+\paragraph{Labels shift systematically, not noisily.} Mean severity
+rises monotonically along the declared-stakes ladder for both judges
+and both modes (deepseek judge: $22.9 \to 26.2 \to 50.6 \to 64.7$;
+GPT-4o judge: $27.4 \to 28.4 \to 34.2 \to 42.5$). The shift is
+monotone \emph{within} tasks, not just on average: severity is
+non-decreasing along the ladder for $71\%$ (deepseek) and $90\%$
+(GPT-4o) of individual tasks in judge mode, and $55\%$/$86\%$ in
+the deployment-time predictor mode. Judges differ in how strongly
+they condition (mean within-task range $46.9$ vs $16.9$ points) ---
+consistent with the implicit-context reading of the BIRD judge
+divergence (Appendix~\ref{app:ood}): what looked like disagreement
+about severity was partly disagreement about the assumed deployment.
+
+\paragraph{Allocation adapts and remains effective.} Using each
+context's with-patch severities as weights and the same context's
+\emph{issue-only} severities as the deployment-time routing signal,
+consequence routing beats random in all eight context$\times$judge
+cells ($+6.1\%$ to $+10.9\%$) and difficulty routing in all eight
+($+17.5\%$ to $+23.5\%$). Crucially, the scheduler routes
+\emph{different tasks} under different declared stakes: the overlap
+between the top-$25\%$ premium sets under the hobby and
+safety-critical contexts is only $36\%$ (deepseek) / $52\%$
+(GPT-4o). Context-dependence of consequence is therefore not a
+threat to the framework but an input to it; the contexts here are
+single-sentence declarations, and richer machine-readable deployment
+profiles (service tier, blast radius, data sensitivity) are a
+natural extension.
 
 \end{document}
