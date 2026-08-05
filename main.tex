@@ -33,9 +33,9 @@ Paper under double-blind review}
 \begin{abstract}
 Modern reasoning models can allocate different amounts of test-time computation, such as thinking tokens, model calls, or compute budget, to different tasks. Existing methods generally drive this allocation by predicted difficulty and spend more compute where it is expected to raise accuracy. This implicitly assumes that all failures cost the same, since an accuracy objective weights every task equally. However, such an assumption does not hold in deployment: A typo in a log message and a migration that corrupts a production database both count as one benchmark failure, but their real-world costs are fundamentally different. To fill this gap,
 we propose consequence-aware test-time compute allocation. Instead of routing compute only by predicted difficulty, we use a lightweight predictor to estimate from the issue text how costly a task would be if solved incorrectly. The scheduler then routes higher-consequence tasks to larger compute tiers or higher thinking budgets under the same total budget. We conduct main experiments on SWE-bench Lite, evaluate cross-dataset behavior on Multi-SWE-bench mini, replicate the full allocation comparison on a disjoint database/ORM pool from SWE-bench Verified, and run an end-to-end out-of-domain probe on BIRD text-to-SQL, covering
-990 tasks in total. Our results reveal that consequence and difficulty are approximately orthogonal under various annotations, and that current thinking models do not allocate compute sufficiently according to consequence. Moreover, our issue-only predictor never misclassifies a high-consequence task as low-consequence on any of the four task pools. 
-Under matched compute budgets, the fully deployment-time consequence-only scheduler reduces cost-weighted loss by $21.8\%$ relative to difficulty-aware routing and retains $93.6\%$ of the corresponding oracle gain. A priority-aware variant that additionally uses empirical marginal-gain information further reduces loss by $30.7\%$, showing the potential value of estimating where extra compute changes the outcome.
-Notably, difficulty-aware routing performs worse than random, because many of the hardest tasks remain unsolved even at the premium tier and therefore have low marginal return from extra compute.
+990 tasks in total. Our results reveal that consequence and difficulty are approximately orthogonal under various annotations, and that current thinking models do not allocate compute sufficiently according to consequence. Moreover, our issue-only predictor never misclassifies a high-consequence task as low-consequence on any of the four task pools ($0/97$). 
+Under matched compute budgets --- in a simulation over cached outcomes of $16$ public SWE-bench systems spanning capability tiers --- the fully deployment-time consequence-only scheduler reduces cost-weighted loss by $21.8\%$ ($17.7$--$29.9\%$ across cost mappings) relative to difficulty-aware routing and retains $93.6\%$ of the corresponding oracle gain; the pattern persists when a single fixed model allocates real best-of-$k$ attempts. A priority-aware variant that additionally uses empirical marginal-gain information further reduces loss by $30.7\%$, showing the potential value of estimating where extra compute changes the outcome.
+Notably, difficulty-aware routing with outcome-derived difficulty performs worse than random --- many of the hardest tasks remain unsolved even at the premium tier --- while deployment-time predicted difficulty merely matches random; under every variant, difficulty routing trails consequence routing.
 \end{abstract}
 
 \section{Introduction}
@@ -233,7 +233,7 @@ $p>0.5$; Appendix~\ref{app:iaa}) and for the issue-only predictor
 rule-based, LLM-with-patch, issue-only, and human-majority, the correlation stays within $\pm 0.11$ and never reaches significance
 (Appendix~\ref{app:rubric}), and the pattern holds across SWE-bench sub-domains (Appendix~\ref{app:subdomain}). High-consequence tasks appear at every difficulty level: a trivial typo can be high-consequence (e.g., security-critical log redaction), while an extremely hard task can be low-consequence (e.g., an obscure parser edge case). Difficulty therefore cannot predict consequence on its own, and a difficulty-only scheduler is blind to the deployment risk that consequence captures.
 
-\textbf{Consequence is not model confidence.} A natural follow-up question is whether consequence simply reflects cross-model disagreement, which some adaptive-compute schedulers use as a proxy for task difficulty. We address this in \S\ref{sec:whyfail}, using it to explain why difficulty-aware allocation systematically underperforms in cost-weighted scenarios.
+\textbf{Consequence is not model confidence.} A natural follow-up question is whether consequence simply reflects cross-model disagreement, which some adaptive-compute schedulers use as a proxy for task difficulty. We address this in \S\ref{sec:whyfail}, using it to explain why outcome-derived difficulty routing underperforms consequence routing in our cost-weighted experiments.
 
 \section{Model Audit: Do Existing Thinkers Allocate by Consequence?}
 \label{sec:audit}
@@ -298,10 +298,25 @@ consequence-aware allocation (Table~\ref{tab:audit}). These audits are
 observational and use a single prompt template per model; different
 framings could shift absolute thinking lengths. The consistency of the
 pattern across five models, three allocation mechanisms, and two length
-measures, however, makes a prompt-specific artifact unlikely. This
-motivates the following question: how should a deployer wrap a
-reasoning model so that it allocates compute effectively by
-consequence?
+measures, however, makes a prompt-specific artifact unlikely.
+
+Two readings of these audits must be kept separate. The audits
+measure the models' \emph{revealed effort signal} --- whether the
+thinking length a model chooses to spend tracks the stakes of the
+task --- and the answer is that it does not. Separately,
+Appendix~\ref{app:within} shows that thinking length is itself a
+weak lever on these tasks: increasing the budget leaves success flat
+for a soft-budget family, and for a hard-cap family lifts it only to
+$8.8\%$ --- never for class-$2$ tasks --- leaving budget-level
+allocation degenerate in both. The two
+findings compound rather than conflict: neither the models' implicit
+allocation nor the deployer-facing thinking-budget knob delivers
+consequence-sensitive compute, so consequence-awareness must be
+introduced at the scheduler level, over levers with real headroom ---
+model tiers (\S\ref{sec:exp}) and repeated attempts
+(Appendix~\ref{app:within}). This motivates the question: how should
+a deployer wrap a reasoning model so that it allocates compute
+effectively by consequence?
 
 \begin{table}[h]
 \centering
@@ -342,6 +357,17 @@ issue-only mode against the same Qwen2.5-7B-Instruct with-patch reference. Both 
 \textbf{Agreement with the with-patch reference.} The primary Qwen
 issue-only predictor reaches Cohen's $\kappa = 0.572$ on all $300$ SWE-bench Lite tasks, indicating substantial agreement on a three-class ordinal labeling problem. The cross-model Claude issue-only predictor reaches $\kappa = 0.379$, lower than expected for a
 different model family, but remains above chance and useful as an independent robustness check. These results suggest that consequence is not only a post-hoc property of the gold patch; it is often inferable from the issue description before the fix is computed.
+
+\textbf{A deliberately recall-heavy operating point.} The predictor
+over-flags: on Lite it marks $84$ tasks class-$2$ against $44$ true
+(recall $0.89$, precision $0.46$). This is the appropriate operating
+point when misses are far costlier than false alarms
+\citep{elkan2001foundations}, and its price is already paid inside
+the allocation results: the $+21.8\%$ deployment gain is achieved
+\emph{with} this imprecise predictor, over-flagged tasks and all.
+Appendix~\ref{app:predictor} reports both ordinal operating points on
+all four pools and the resulting bound on the missed-high-consequence
+rate ($0/97$ across pools; one-sided $95\%$ upper bound $3.0\%$).
 
 \textbf{The errors that matter.} For compute allocation, aggregate agreement is not the only criterion. The dangerous error for scheduling is not a small
 label mismatch but a severe under-estimation of risk, namely routing a
@@ -471,17 +497,24 @@ count and form two tiers: a cheap tier consisting of the bottom
 For each task, $p_{\mathrm{cheap}}(x)$ is the empirical fraction of
 cheap-tier solvers that resolve the task. We define
 $p_{\mathrm{premium}}(x)$ analogously for the premium tier. Unless
-otherwise stated, we assume a fixed compute price ratio
+otherwise stated, we assume a compute price ratio
 $c(\text{premium})/c(\text{cheap}) = 4$, consistent with typical
-model-tier price gaps on commercial APIs.
+model-tier price gaps on commercial APIs. This ratio is an
+assumption, not a measurement; at the matched-compute operating
+point the strategy comparison is unaffected by it by construction
+--- every strategy routes the same number of tasks premium --- and
+it only scales the budget axis of the Pareto analysis.
 
 \textbf{Strategies.} We compare seven allocation strategies under a
 matched total compute budget. Random routes a uniformly random
 top-$q\%$ subset of tasks to the premium tier; it is averaged over
 $1{,}000$ random allocations at the same top-$25\%$ premium budget.
 Difficulty-aware
-(Snell-style) routes the top-$q\%$ by predicted
-difficulty~\citep{snell2024scaling}. Consequence-aware
+(Snell-style~\citep{snell2024scaling}) routes the top-$q\%$ by
+outcome-derived difficulty ($1-\overline{\mathrm{passrate}}$ across
+the $16$ systems; \S\ref{sec:cons}), the strongest difficulty signal
+in this data; deployment-time \emph{predicted}-difficulty variants
+are evaluated in \S\ref{sec:whyfail}. Consequence-aware
 (predictor) routes the top-$q\%$ by the issue-only consequence
 predictor of \S\ref{sec:pred}. We evaluate two predictor variants:
 the Qwen issue-only predictor, which is our primary deployment-time
@@ -597,9 +630,12 @@ Appendix~\ref{app:bootstrap} to verify that the gain is not driven by
 a single high-consequence task. Finally, the entire strategy ordering
 replicates on a second, disjoint pool of $140$ database/ORM tasks
 from SWE-bench Verified~\citep{openai2024swebenchverified} with an
-independent $20$-model tier system (Appendix~\ref{app:seconddomain}), and every qualitative conclusion
-survives replacing the labeling judge with a different model family
-(Appendix~\ref{app:judge2}).
+independent $20$-model tier system (Appendix~\ref{app:seconddomain}). When the labeling judge is
+replaced with a different model family, difficulty-aware routing
+remains worst and priority-aware best on both pools, while the
+consequence-only margin over random is judge-dependent: it collapses
+when a judge's calibration flattens the cost weights, exactly as the
+cost-weighted objective predicts (Appendix~\ref{app:judge2}).
 
 \textbf{Difficulty-aware allocation is worse than random at the main
 operating point.} The most striking result in Table~\ref{tab:main} is
@@ -712,6 +748,38 @@ struggle. They are also the tasks where even the premium tier often
 does not help. A difficulty-aware scheduler therefore concentrates its
 upgrade budget on tasks that cannot be saved by the available premium
 tier.
+
+\textbf{How much of this is mechanical?} Difficulty and
+$\Delta\mathrm{success}$ are computed from the same outcomes, and a
+task solved by no system has $\mathrm{difficulty} = 1$ and
+$\Delta\mathrm{success} = 0$ \emph{by identity}, so the never-solved
+floor contributes a negative component by construction. We decompose
+this. Excluding the $76/300$ never-solved tasks, the correlation
+remains strong ($\rho = -0.489$, $p < 10^{-14}$): among tasks that at
+least one system solves, harder tasks genuinely benefit less from the
+premium tier. (On the Verified pool the coupling is mostly the floor
+identity: $-0.377 \to -0.043$, n.s., after excluding its $18$ floor
+tasks.) We additionally measured the relationship with a fully
+independent, deployment-time difficulty estimate --- issue-only
+solvability forecasts from two model families
+(Appendix~\ref{app:marginal}) --- which correlates with
+$\Delta\mathrm{success}$ at $|\rho| < 0.15$ (n.s.) in every
+family$\times$pool combination.
+
+\textbf{What this means for difficulty routing.} Routing by
+outcome-derived difficulty --- the strongest available version, and
+the one in Table~\ref{tab:main} --- is worse than random because it
+actively selects the unsalvageable floor. Routing by the
+deployment-time \emph{predicted} difficulty removes the mechanical
+component along with most of the signal, and lands at the level of
+random ($+12.4\%$ to $+16.7\%$ vs.\ random's $+13.8\%$ on Lite;
+$+9.4\%$ to $+12.9\%$ vs.\ $+12.4\%$ on Verified) --- consistently
+below consequence routing ($+21.8\%$ / $+14.9\%$). The comparison is
+ironic but informative: the better difficulty is measured, the worse
+difficulty routing performs, because true difficulty anti-selects
+marginal gain. Difficulty routing at its noisiest matches random; at
+its most informed, it is worse; in no variant does it match or
+exceed consequence routing.
 
 \textbf{Consequence is uncorrelated with marginal gain.}
 \(\rho(\mathrm{cons}, \Delta\mathrm{success}) = +0.09\) (n.s.).
@@ -1234,6 +1302,40 @@ they may waste compute, but they do not under-allocate high-consequence
 tasks. This supports the conclusion that both predictors avoid the
 deployment-critical high-to-low error on this benchmark.
 
+\paragraph{Operating characteristics of the ordinal predictor.} The
+three-class predictor admits two alarm thresholds for detecting true
+class-$2$ tasks: flag on $\hat{c}{=}2$, or flag on
+$\hat{c}{\ge}1$. Across the four pools:
+
+\begin{center}
+\small
+\begin{tabular}{lcccc}
+\toprule
+Pool & true $2$s & recall / precision ($\hat{c}{=}2$) & recall / precision ($\hat{c}{\ge}1$) \\
+\midrule
+Lite      & $44$ & $0.89$ / $0.46$ & $1.00$ / $0.18$ \\
+MSWE mini & $3$  & $1.00$ / $0.16$ & $1.00$ / $0.01$ \\
+Verified  & $47$ & $0.96$ / $0.62$ & $1.00$ / $0.37$ \\
+BIRD      & $3$  & $1.00$ / $0.20$ & $1.00$ / $0.03$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The recall-heavy behavior is an operating-point choice appropriate to
+asymmetric error costs, not an accident, and its false-alarm price is
+internal to every allocation number we report. The operating point is
+also not a knife edge: eliciting a \emph{continuous} issue-only
+severity score ($0$--$100$) from two independent model families yields
+a threshold-sweepable class-$2$ detector with AUC $0.69$--$0.82$
+across judge$\times$pool combinations, on which recall $\ge 0.9$ is
+available across a wide threshold band (e.g., deepseek-chat at
+thresholds $50$--$70$: recall $0.91$--$0.98$ at precision
+$0.41$--$0.45$ on Verified). On the safety
+property: across the four pools the predictor has missed $0$ of $97$
+true high-consequence tasks; the one-sided $95\%$ Clopper--Pearson
+upper bound on the miss rate is $3.0\%$, which is the honest
+quantitative content of the ``never misclassifies'' statement.
+
 \section{Per-Task Marginal Utility (Excerpt)}
 \label{app:marginal}
 
@@ -1510,7 +1612,8 @@ This makes the pool a stress test for our thesis rather than a
 confirmation by construction --- and the result is instructive.
 Even with this correlation, difficulty-aware routing underperforms
 random by $12.4\%$, because the failure mechanism of
-\S\ref{sec:whyfail} is domain-general:
+\S\ref{sec:whyfail} replicates on this independent pool (largely via
+the never-solved floor; see the decomposition in \S\ref{sec:marginal}):
 $\rho(\mathrm{difficulty}, \Delta\mathrm{success}) = -0.377$
 ($p < 0.001$) on this pool, so the hardest tasks remain the ones
 premium compute cannot save. The advantage of consequence-aware
@@ -1561,7 +1664,26 @@ under the second judge's heavier class-$2$ mass. Consequence--difficulty
 orthogonality also replicates under the second judge
 ($\rho = +0.118$ on Lite). The paper's conclusions are therefore
 robust to replacing the label source with a differently-calibrated
-judge from another model family.
+judge from another model family, with one instructive exception
+analyzed next.
+
+\paragraph{When and why the consequence-only margin collapses.} The
+Verified tie with random is not an anomaly; it is a prediction of the
+cost-weighted objective. Consequence routing beats random only by
+concentrating premium compute on high-weight tasks, so its margin is
+governed by how much weight mass the top quartile can hold. The
+deepseek judge marks $77\%$ of Verified tasks class-$2$, flattening
+the weights to a top-$25\%$ share of $0.283$ (a perfectly uniform
+pool gives $0.25$); the consequence-over-random margin is accordingly
+$-0.7\%$. Across all ten pool$\times$weight-source settings in this
+paper (four Lite, four Verified, two BIRD), the top-quartile weight
+share predicts the consequence-over-random margin at
+$\rho = +0.842$ ($p = 0.002$) for oracle routing and
+$\rho = +0.661$ ($p = 0.038$) for the deployment-time predictor.
+The BIRD boundary condition (Appendix~\ref{app:ood}) and this
+judge-swap tie are two instances of the same law: consequence-aware
+allocation pays exactly in proportion to the cost heterogeneity the
+labeler perceives.
 
 \section{Out-of-Domain Probe: Text-to-SQL Analytics (BIRD), End to End}
 \label{app:ood}
@@ -1741,7 +1863,9 @@ classes $0$/$1$/$2$) received the full $8$ attempts and are used
 here. Each attempt is graded by a Claude Sonnet~4.5 automated judge
 that compares the candidate patch against the gold patch (judge
 robustness is checked at the end of this appendix).
-Compute is the number of attempts $k$. Following the oracle setup
+Compute is the number of attempts $k$; the difficulty-aware baseline
+routes by the same outcome-derived difficulty as \S\ref{sec:exp}.
+Following the oracle setup
 of the main experiments, best-of-$k$ success means ``at least one of
 the first $k$ attempts passes the judge,'' i.e. we assume an oracle
 verifier that selects a passing attempt when one exists; this is the
