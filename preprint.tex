@@ -2109,6 +2109,92 @@ while positive coupling favors difficulty routing (MATH). The pilot
 that produced every number in this appendix cost a few dollars per
 pool.
 
+\paragraph{Declared dollar stakes: how much heterogeneity flips the
+signal.} The probes above take cost heterogeneity as each pool hands
+it to us. The converse question is equally practical: if error costs
+were \emph{explicit and dollar-denominated} --- a \$10K
+internal memo versus a \$10M investment decision --- would
+consequence-aware allocation beat difficulty-aware allocation even in
+the domains where difficulty currently wins? We answer with a
+controlled sweep over the same live outcomes. Each task receives a
+deployment-declared stakes tier (high/mid/low, $20/50/30\%$),
+assigned at random \emph{within difficulty strata} so that stakes are
+orthogonal to difficulty by construction (mean $|\rho| \le 0.03$;
+strata are official levels on MATH and empirical-difficulty quintiles
+on FinQA), with dollar weights $\{1, \sqrt{S}, S\}$ whose spread $S$
+we sweep from $1\times$ to $10^{6}\times$. Routing by stakes uses the
+declared tier --- metadata a deployer holds at decision time
+(Appendix~\ref{app:context}), not an oracle read of outcomes --- and
+the entire assignment is redrawn $200$ times; we report mean margins
+of consequence-aware over difficulty-aware routing and the fraction
+of assignments in which consequence wins
+(Table~\ref{tab:stakescross}).
+
+\begin{table}[t]
+\centering
+\caption{Declared-stakes sweep: margin of consequence-aware over
+difficulty-aware routing (relative dollar-weighted loss,
+$(\mathcal{L}_{\mathrm{diff}}-\mathcal{L}_{\mathrm{cons}})/\mathcal{L}_{\mathrm{diff}}$)
+as the dollar spread $S$ between the highest- and lowest-stakes tier
+grows; mean over $200$ orthogonal stakes assignments, with the share
+of assignments where consequence routing wins. On MATH ---
+difficulty's best-case domain --- the signal flips between
+$10\times$ and $30\times$.}
+\label{tab:stakescross}
+\small
+\begin{tabular}{lrrrrrrr}
+\toprule
+Spread $S$ & $1$ & $3$ & $10$ & $30$ & $100$ & $10^{3}$ & $10^{6}$ \\
+\midrule
+MATH margin & $-28.3\%$ & $-18.4\%$ & $-6.5\%$ & $+3.2\%$ & $+11.5\%$ & $+20.2\%$ & $+24.9\%$ \\
+\quad cons wins & $0\%$ & $0\%$ & $26\%$ & $62\%$ & $76\%$ & $84\%$ & $84\%$ \\
+\addlinespace
+FinQA margin & $+2.9\%$ & $+3.6\%$ & $+4.4\%$ & $+5.1\%$ & $+5.7\%$ & $+6.3\%$ & $+6.6\%$ \\
+\quad cons wins & $84\%$ & $78\%$ & $76\%$ & $76\%$ & $76\%$ & $76\%$ & $76\%$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+On MATH, the sweep turns the quadrant's qualitative boundary into a
+quantitative one. At homogeneous costs ($S{=}1$) difficulty-aware
+routing wins by $28$ points of relative loss, matching the ordering
+of the probe above; the crossover sits between $10\times$ and $30\times$; and at
+a \$10-versus-\$10M spread ($S{=}10^{6}$) consequence
+routing carries $24.9\%$ lower dollar-weighted loss, winning $84\%$
+of assignments. Roughly $30\times$ cost heterogeneity is what it
+takes for the stakes signal to overtake difficulty \emph{in
+difficulty's own best-case regime}. The residual $16\%$ of
+assignments that difficulty still wins at extreme spread are the
+positive coupling reasserting itself: official level identifies where
+the premium tier actually works, so assignments that happen to place
+high stakes on high-gain hard problems let difficulty keep pace. On
+FinQA the ordering favors consequence at every spread ($+2.9\%$ to
+$+6.6\%$, winning $76$--$84\%$ of assignments), but for the
+no-headroom reason: difficulty-aware routing concentrates the
+premium tier where it does not help (it trails even random there),
+while covering \emph{all} declared high-stakes tasks captures what
+little headroom exists. The priority rule $w \times \Delta$
+dominates every cell of the sweep in both pools, as the objective
+requires.
+
+\paragraph{Realistic dollar stakes on FinQA: the quadrant still
+binds.} Replacing the synthetic tiers with the \emph{judged}
+consequence classes mapped to dollars
+(\$10K/\$1M/\$10M) gives the realistic
+version of the same test, under both judges' class distributions
+(Qwen $25/115/10$; GPT-4o $36/81/33$). Here single-signal consequence
+routing lands between $-5.7\%$ and $+1.1\%$ against difficulty
+across judges and signal sources (oracle or issue-only predictor) ---
+within noise, exactly as the no-headroom quadrant predicts, because
+denominating stakes in dollars does not create headroom where the
+premium tier has none. What the dollar weights \emph{do} change is
+the value of knowing where premium compute works: the dual-signal
+priority row wins by $+20.0\%$ and $+15.3\%$ against difficulty and
+by $+16.4\%$ and $+14.9\%$ against random under the two judges. Explicit dollar
+stakes raise the stakes of allocation without changing its boundary
+conditions; the quadrant, not the currency, decides which signal to
+route by.
+
 \section{Within-Model Allocation: Attempts as the Compute Lever}
 \label{app:within}
 
