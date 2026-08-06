@@ -941,7 +941,12 @@ the central orthogonality result of \S\ref{sec:cons} replicates under
 human labeling ($\rho = -0.066$, n.s., $n{=}75$). We therefore use the human labels as a
 construct-validity check, while retaining the LLM-with-patch label as
 the primary signal in the main experiments because it covers the full
-SWE-bench Lite task pool.
+SWE-bench Lite task pool. Beyond agreement with human raters, the
+labels also track \emph{maintainer-revealed} severity in the real
+repositories: fixes for class-$2$ tasks were backported to stable
+release branches at five times the rate of class-$0$ fixes ($41.9\%$
+vs.\ $8.3\%$, ordered trend $p = 0.0001$), a gradient that persists
+within backporting repositories (Appendix~\ref{app:realcost}).
 
 \textbf{Scope of evaluation.} Our main allocation experiment uses
 publicly available per-task outcomes from 16 SWE-bench Lite leaderboard
@@ -1232,6 +1237,68 @@ primary signal in the main results because it is the labeling under
 which all four supporting analyses
 (\S\ref{sec:cons}, \S\ref{sec:pred}, \S\ref{sec:exp}, \S\ref{sec:whyfail})
 are jointly applicable on the full 300-task pool.
+
+\section{External Validity: Maintainer-Revealed Severity}
+\label{app:realcost}
+
+The human study of Appendix~\ref{app:iaa} checks the consequence
+labels against human judgment; this appendix checks them against
+\emph{maintainer behavior} in the real repositories. When a bug is
+consequential, maintainers do something costly about it: they
+cherry-pick the fix onto stable release branches so that deployed
+users receive it without upgrading. Backporting is a deliberate
+engineering expense paid task-by-task, which makes it the closest
+available behavioral ground truth for deployment severity.
+
+\paragraph{Protocol.} Each SWE-bench Lite \texttt{instance\_id}
+encodes its originating pull request. For $297/300$ tasks (three lack
+a resolvable merge commit) we mined the real repositories for four
+signals: whether the fix was \emph{backported} --- detected by
+counting commits across \emph{all} branches of a full local clone
+whose subject line contains the merge commit's subject (cherry-picks
+preserve subjects; django-style backports prefix ``\texttt{[4.0.x]}'';
+spot-checked against actual stable-branch commits) --- along with PR
+open-to-merge duration, discussion intensity (issue plus review
+comments), and security markers (CVE/security in title, body, or
+labels).
+
+\paragraph{Backporting tracks the consequence class.} The backport
+rate is strictly monotone in the judged class: $8.3\%$ of class-$0$
+fixes ($5/60$), $20.6\%$ of class-$1$ ($40/194$), and $41.9\%$ of
+class-$2$ ($18/43$) --- a five-fold pooled gradient (ordered trend
+$\rho = +0.232$, $p = 0.0001$; class-$2$ vs.\ rest odds ratio $3.34$,
+Fisher $p = 0.0009$). Part of this pooled association reflects
+repository composition --- django both backports more and carries
+more class-$2$ tasks --- so we also report the stratified picture:
+a Cochran--Mantel--Haenszel test within repositories gives pooled
+OR $1.76$ ($p = 0.14$), and restricting to the five repositories that
+backport at all ($n = 166$) preserves both the monotone gradient
+($19.2\% / 36.3\% / 47.4\%$) and a significant ordered trend
+($\rho = +0.175$, $p = 0.024$), while the dichotomized class-$2$
+contrast is directionally consistent but underpowered at these sizes
+(OR $1.84$, $p = 0.12$; django alone: $48.5\%$ vs.\ $33.3\%$,
+OR $1.88$, $p = 0.14$). Two readings of the between-repository share
+are possible, and we flag rather than adjudicate them: repository
+identity is partly a nuisance stratum, but it is also itself
+consequence-bearing --- a production web framework and a symbolic
+mathematics library differ precisely in deployment blast radius, which
+is what the label is supposed to measure. Neither reading threatens
+the within-repository trend, which is positive and significant.
+The association is not an artifact of PR age
+($\rho(\mathrm{class}, \mathrm{year}) = +0.089$, n.s.;
+$\rho(\mathrm{backported}, \mathrm{year}) = +0.031$, n.s.).
+
+\paragraph{Honest nulls.} The remaining mined signals do not
+separate the classes: open-to-merge duration is indistinguishable
+(medians $2.0 / 1.9 / 1.6$ days; Kruskal--Wallis $p = 0.56$), as is
+comment intensity (medians $4 / 5 / 3$; $p = 0.19$) --- consistent
+with these quantities measuring process friction rather than severity
+--- and security markers are essentially absent from Lite ($1/297$
+PRs), so that signal is uninformative here. The picture that
+survives is specific: where maintainers reveal severity through a
+costly, deliberate act, the revealed severity agrees with the
+consequence label; where the mined quantity is dominated by workflow
+noise, it agrees with nothing.
 
 \section{Statistical Robustness of Allocation Results}
 \label{app:bootstrap}
