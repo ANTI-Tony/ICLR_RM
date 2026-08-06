@@ -45,7 +45,6 @@ We conduct main experiments on SWE-bench Lite, evaluate cross-dataset behavior o
 Under matched compute budgets --- in a simulation over cached outcomes of $16$ public SWE-bench systems spanning capability tiers --- the fully deployment-time consequence-only scheduler reduces cost-weighted loss by $21.8\%$ ($17.7$--$29.9\%$ across cost mappings) relative to difficulty-aware routing and retains $93.6\%$ of the corresponding oracle gain ($84.3\%$ when anchored at the random baseline); the pattern persists when a single fixed model allocates real best-of-$k$ attempts. A priority-aware variant that additionally uses empirical marginal-gain information reaches a $30.7\%$ reduction, showing the potential value of estimating where extra compute changes the outcome. Finally, the out-of-domain probe confirms the framework's own prediction of when the consequence edge disappears (homogeneous costs) and when difficulty routing stops being penalized (no negative difficulty--gain coupling).
 Notably, difficulty-aware routing with outcome-derived difficulty performs worse than random --- many of the hardest tasks remain unsolved even at the premium tier --- while deployment-time predicted difficulty performs at or slightly above the level of random; on both software-engineering pools, every difficulty-routing variant trails consequence routing.
 \end{abstract}
-
 \section{Introduction}
 \label{sec:intro}
 
@@ -61,16 +60,9 @@ stopping~\citep{manvi2024adaptive}, and budgeted verifier-call
 scheduling~\citep{qu2026adaptivetesttime} differ in mechanism but follow a common
 rule, namely that harder tasks deserve more compute.
 
-
-This principle is natural for benchmarks that optimize average accuracy under a compute budget. In such settings, each task contributes one unit to the final score, and every failure is assumed to be interchangeable~\citep{alomrani2025reasoningbudget}. However, this assumption does not hold in deployment. Consider two failures a coding assistant might produce on the same day: a typo in a log message and a database migration that silently corrupts a production table under a race condition. A benchmark records both as one failed task, but in deployment their costs are nowhere near equal: preventing the migration error is worth far more compute, even when the two are equally hard to fix.
-
-This deployment mismatch exposes a missing term in current LLM adaptive-compute objectives. The closest prior framing is rational metareasoning~\citep{russell1991right, hay2012selecting,
-yang2024rational}, which treats computation as an action whose value
-depends on its expected utility. From this perspective, additional reasoning is useful only when the expected reduction in downstream loss exceeds the cost of computation~\citep{alomrani2025reasoningbudget}. Modern LLM implementations of adaptive compute, however, typically collapse this utility term into a uniform accuracy objective~\citep{li2025reasoningllms}. We therefore move beyond difficulty-aware allocation and cast consequence-aware allocation as a cost-weighted problem: for each task, a scheduler should choose a compute tier that trades off the price of additional computation against the expected consequence-weighted error. When all tasks have equal error cost, this objective reduces to standard accuracy maximization under a compute budget~\citep{alomrani2025reasoningbudget}. When error costs vary, however, difficulty alone is no longer a sufficient routing signal.
-
 \begin{figure}[t]
 \centering
-\includegraphics[width=\linewidth]{fig_motivation.pdf}
+\includegraphics[width=\linewidth]{fig_motivation.png}
 \caption{\textbf{Three contemporary thinking models do not sufficiently
 allocate compute by consequence.} Each panel summarizes one model's
 relationship between actual thinking length and our consequence label
@@ -84,6 +76,12 @@ consequence sensitivity to explain the gains of consequence-aware
 routing observed later in the paper.}
 \label{fig:motivation}
 \end{figure}
+
+This principle is natural for benchmarks that optimize average accuracy under a compute budget. In such settings, each task contributes one unit to the final score, and every failure is assumed to be interchangeable~\citep{alomrani2025reasoningbudget}. However, this assumption does not hold in deployment. Consider two failures a coding assistant might produce on the same day: a typo in a log message and a database migration that silently corrupts a production table under a race condition. A benchmark records both as one failed task, but in deployment their costs are nowhere near equal: preventing the migration error is worth far more compute, even when the two are equally hard to fix.
+
+This deployment mismatch exposes a missing term in current LLM adaptive-compute objectives. The closest prior framing is rational metareasoning~\citep{russell1991right, hay2012selecting,
+yang2024rational}, which treats computation as an action whose value
+depends on its expected utility. From this perspective, additional reasoning is useful only when the expected reduction in downstream loss exceeds the cost of computation~\citep{alomrani2025reasoningbudget}. Modern LLM implementations of adaptive compute, however, typically collapse this utility term into a uniform accuracy objective~\citep{li2025reasoningllms}. We therefore move beyond difficulty-aware allocation and cast consequence-aware allocation as a cost-weighted problem: for each task, a scheduler should choose a compute tier that trades off the price of additional computation against the expected consequence-weighted error. When all tasks have equal error cost, this objective reduces to standard accuracy maximization under a compute budget~\citep{alomrani2025reasoningbudget}. When error costs vary, however, difficulty alone is no longer a sufficient routing signal.
 
 One might hope that sufficiently strong reasoning models already learn
 this distinction implicitly. If high-consequence tasks naturally induce
