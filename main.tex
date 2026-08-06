@@ -957,16 +957,17 @@ again worse than random. Appendix~\ref{app:seconddomain} further
 repeats the full allocation comparison on a consequence-rich pool of
 $140$ database/ORM tasks from SWE-bench Verified ($33.6\%$ class-$2$)
 with an independent $20$-model tier system, and the strategy ordering
-replicates exactly. Appendix~\ref{app:ood} further probes a
-non-software domain --- business-database analytics (BIRD
-text-to-SQL~\citep{li2023bird}) --- with a fully end-to-end pipeline (live two-tier
-inference, execution grading, predictor routing), finding that the
-framework's predictions track the domain's cost structure: the pool
-lacks the cost heterogeneity and the negative difficulty--gain
-coupling that drive the main result, and correspondingly consequence
-routing collapses to random there while difficulty routing is no
-longer penalized. Broader multi-domain evaluation remains future
-work.
+replicates exactly. Appendix~\ref{app:ood} further probes three
+non-software domains with fully live pipelines --- database analytics
+(BIRD text-to-SQL~\citep{li2023bird}), financial reasoning
+(FinQA~\citep{chen2021finqa}), and competition mathematics
+(MATH~\citep{hendrycks2021math}) --- finding that the framework's
+predictions track each domain's structure: the consequence edge
+vanishes without cost heterogeneity (BIRD), no signal helps without
+premium headroom (FinQA), and difficulty routing rightly wins where
+the difficulty--gain coupling turns positive (MATH). Domains with
+regulated, physically-consequential deployments (medicine, law,
+operations) remain future work.
 
 \textbf{Cost is a coarse scalar.} We represent consequence as an
 ordinal label in $\{0,1,2\}$. This is a deliberate simplification.
@@ -2080,6 +2081,24 @@ non-software domains, are, we believe, stronger evidence for the
 framework than repetitions of the headline ordering would have been:
 consequence routing is best exactly where its preconditions hold,
 and the preconditions are measurable by a deployer.
+
+\paragraph{Practical guidance: the deployer's checklist.} All three
+conditions can be estimated from a small pilot before committing to a
+routing policy. (1) \emph{Headroom}: run both tiers on a modest task
+sample (we used $150$ tasks $\times$ $3$ samples throughout) and
+compare mean success; if the premium tier does not beat the cheap
+tier, stop --- no routing signal can help (FinQA). (2) \emph{Cost
+heterogeneity}: elicit consequence labels on the same sample (an
+issue-only LLM pass suffices; \S\ref{sec:pred}) and check how much
+weight mass the top quartile holds; near-uniform weights mean
+consequence routing will track random (BIRD under the primary judge,
+MATH). (3) \emph{Coupling}: from the same pilot outcomes, correlate
+difficulty with the per-task premium gain; strongly negative coupling
+(unsalvageable hard tail) is the regime where difficulty routing
+actively wastes budget and consequence routing pays (SWE-bench),
+while positive coupling favors difficulty routing (MATH). The pilot
+that produced every number in this appendix cost a few dollars per
+pool.
 
 \section{Within-Model Allocation: Attempts as the Compute Lever}
 \label{app:within}
