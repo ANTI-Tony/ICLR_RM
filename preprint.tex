@@ -1061,7 +1061,11 @@ universally dominant router but a decision map for which signal to
 route by. Beyond one-shot routing, a fully
 deployment-time sequential policy (consequence-gated attempt caps
 with a gold-free verifier) preserves the advantage while cutting
-realized compute by roughly a third.
+realized compute by roughly a third. Run as a live streaming router
+--- sequential arrivals, real-time budget pacing, closed-loop
+verifier escalation with live inference --- the same machinery
+reproduces these boundary conditions online rather than from a cache
+(Appendix~\ref{app:online}).
 
 These results suggest that test-time compute allocation should not be
 treated only as a question of task difficulty. For deployment, the
@@ -2510,6 +2514,103 @@ difficulty-aware baseline, which is itself worse than random ---
 reproducing the cross-model main result with the model held fixed.}
 \label{fig:within}
 \end{figure}
+
+\section{A Live Online Deployment Run}
+\label{app:online}
+
+The evaluations elsewhere in the paper score routing policies on
+\emph{cached} outcomes. This appendix closes the loop: we wrap the
+full pipeline as a live streaming router and run it end-to-end with
+real inference, real-time budget pacing, and a closed-loop verifier,
+to check that the machinery --- and the boundary-condition framework
+--- survive the move from offline scoring to online operation.
+
+\paragraph{Setup.} A stream of $300$ tasks ($150$ FinQA
+$+$ $150$ MATH, shuffled, seed $7$) arrives one at a time. Each task
+carries a deployment-declared stakes tier mapped to dollars
+(\$10K/\$1M/\$10M; assignment frozen,
+orthogonal to difficulty by the stratified construction of
+Appendix~\ref{app:ood}). Four policies process the \emph{same}
+stream strictly sequentially --- every decision uses only tasks seen
+so far and a real-time paced premium budget (premium calls
+$\le 25\%$ of arrivals) --- with live calls to
+\texttt{gpt-4o-mini} (cheap) and \texttt{gpt-4o}/\texttt{o4-mini}
+(premium). \textsc{random} flips a budgeted coin; \textsc{diff}
+routes on a live \texttt{gpt-4o-mini} difficulty rating against a
+running top-quartile threshold; \textsc{cons} routes on the declared
+stakes against the same online-threshold machinery; \textsc{seq}
+takes a cheap attempt, scores it with a \emph{gold-free} verifier
+(Appendix~\ref{app:marginal}; never sees the answer), and escalates
+to premium only when the verifier is unsure \emph{and} stakes are
+non-trivial. No routing component ever sees a gold answer; grading is
+post-hoc. The run completed all $300$ tasks on all four arms with zero
+errors.
+
+\paragraph{The framework survives live operation.} The live
+results reproduce the offline boundary predictions exactly
+(Table~\ref{tab:online}). This stream is deliberately built from the
+two \emph{non-software} regimes where the quadrant says consequence
+should \emph{not} be the winning signal, and it is not: dominated by
+MATH's positive difficulty--gain coupling, the live difficulty router
+wins ($-32.7\%$ realized dollar-weighted loss vs.\ random),
+consequence-aware routing beats random ($-18.8\%$; paired bootstrap
+$P = 92\%$) but not difficulty, and FinQA contributes no separation
+at all (all arms within $\pm6\%$, the no-headroom regime). The
+per-pool split is unambiguous --- MATH: difficulty $5{,}516$,
+consequence $8{,}217$, random $13{,}013$; FinQA: all $\approx
+11{,}000$ --- so the framework predicts its own online outcome, down
+to which domain drives it. A deployer running this exact system would
+be correctly steered to route this stream by difficulty.
+
+\begin{table}[t]
+\centering
+\caption{Live online run, $300$-task FinQA$+$MATH stream, decisions
+made sequentially under a real-time paced budget. Realized
+dollar-weighted loss (DWL), premium-tier utilization, unweighted
+accuracy. The closed-loop \textsc{seq} policy matches the uniform
+accuracy of the one-shot routers while spending a fifth of their
+premium budget.}
+\label{tab:online}
+\small
+\begin{tabular}{lrrrl}
+\toprule
+Policy & DWL & vs.\ random & premium & accuracy \\
+\midrule
+\textsc{random}      & $24{,}426$ & $0\%$      & $23.0\%$ & $70.0\%$ \\
+\textsc{diff}        & $\mathbf{16{,}432}$ & $\mathbf{-32.7\%}$ & $25.3\%$ & $70.7\%$ \\
+\textsc{cons}        & $19{,}831$ & $-18.8\%$ & $19.3\%$ & $68.7\%$ \\
+\textsc{seq} (verifier-gated) & $21{,}627$ & $-11.5\%$ & $\mathbf{5.0\%}$ & $70.0\%$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{The closed loop conserves premium correctly.} The
+verifier-gated \textsc{seq} policy is the operational payoff. Its
+gold-free verifier scored the cheap-tier attempts confidently
+(mean $9.3/10$) and triggered escalation on only $15/300$ tasks, so
+\textsc{seq} shipped at $5.0\%$ premium utilization --- against
+$23$--$25\%$ for the one-shot routers --- while \emph{matching}
+their unweighted accuracy ($70.0\%$, identical to random,
+within $0.7$ points of difficulty). On a stream where the premium
+tier buys little average accuracy, the live closed loop correctly
+declines to spend it, in flight, with no oracle. This is the
+online-operation analogue of the offline sequential result above
+(Appendix~\ref{app:within}, ``removing the oracle verifier''), now
+demonstrated with real-time arrivals and live inference rather than
+replayed from a cache.
+
+\paragraph{Scope.} This run demonstrates that the pipeline operates
+online and behaves as the framework predicts; it is not a live
+\emph{consequence-wins} demonstration, because a live stream in the
+software-engineering regime where consequence is the correct signal
+would require executing generated patches against test suites at
+each arrival --- outside what a lightweight probe can run. The
+consequence-wins case under sequential, no-oracle decisions is
+established on cached SWE-bench traces in
+Appendix~\ref{app:within}; the present run establishes that the same
+decision machinery runs live and honors the boundary conditions when
+the stream falls in difficulty's regime. A production online system
+under real traffic remains the natural next step.
 
 \section{Context-Conditional Consequence}
 \label{app:context}
