@@ -1034,10 +1034,16 @@ We also find that difficulty-aware routing with outcome-derived
 difficulty can underperform random allocation, because the hardest
 tasks often remain unsolved at every available tier and therefore
 have low marginal return from extra compute. These results hold
-under two preconditions the paper makes explicit --- heterogeneous
-error costs and hard tasks that resist premium compute --- and the
-out-of-domain probe confirms that where the preconditions fail, the
-effects vanish as predicted. Beyond one-shot routing, a fully
+under preconditions the paper makes explicit and a deployer can
+measure before committing compute: the premium tier must actually
+help (FinQA fails this and no signal matters), error costs must be
+heterogeneous (BIRD and MATH fail this and the consequence edge
+vanishes), and the hardest tasks must resist premium compute (MATH
+reverses this and difficulty routing rightly wins). The out-of-domain
+probes confirm that in each regime the outcome is the one the
+objective prescribes --- the paper's contribution is thus not a
+universally dominant router but a decision map for which signal to
+route by. Beyond one-shot routing, a fully
 deployment-time sequential policy (consequence-gated attempt caps
 with a gold-free verifier) preserves the advantage while cutting
 realized compute by roughly a third.
