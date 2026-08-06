@@ -68,7 +68,7 @@ allocate compute by consequence.} Each panel summarizes one model's
 relationship between actual thinking length and our consequence label
 on SWE-bench Lite tasks. Qwen3-8B's thinking length is uncorrelated
 with consequence ($\rho = 0.002$). Qwen3-VL-8B-Thinking pins
-$99.3\%$ of its sampled generations at its 8192-token cap. Claude Sonnet 4.5 with
+$99.3\%$ of tasks ($298/300$) at its 8192-token cap. Claude Sonnet 4.5 with
 extended thinking shows a statistically significant but weak
 consequence sensitivity ($\rho = 0.20$, $p = 0.008$, $n = 171$).
 Across three different allocation mechanisms, none exhibits sufficient
@@ -84,7 +84,7 @@ auditing contemporary thinking models on SWE-bench Lite (three of
 which are shown in Figure~\ref{fig:motivation}). The results show three different failure
 modes. Qwen3-8B varies its thinking length, but that variation is
 essentially uncorrelated with consequence
-($\rho = 0.002$). Qwen3-VL-8B-Thinking pins $99.3\%$ of its sampled generations at its
+($\rho = 0.002$). Qwen3-VL-8B-Thinking pins $99.3\%$ of tasks ($298/300$) at its
 8192-token cap, leaving almost no room for task-specific allocation.
 Claude Sonnet 4.5 with extended thinking shows a statistically
 significant relationship between thinking length and consequence
@@ -268,16 +268,17 @@ extended-thinking mechanisms), measuring whether actual thinking
 length scales with the LLM-with-patch consequence label.
 
 \textbf{Qwen3-8B\footnote{\url{https://huggingface.co/Qwen/Qwen3-8B}}  (hybrid thinking).} Qwen3-8B alternates
-between ``thinking'' and ``direct'' modes via a control token. On 50
-SWE-bench Lite tasks with \texttt{max\_new\_tokens}$=4096$, the thinking-character
-count varies across tasks, but the rank correlation with consequence
-is negligible with $\rho(\mathrm{thinking}, \mathrm{cons}) = +0.002$. Hence, the allocation carries essentially no consequence signal.
+between ``thinking'' and ``direct'' modes via a control token. On all
+$300$ SWE-bench Lite tasks with \texttt{max\_new\_tokens}$=4096$
+(greedy, one generation per task), the thinking-token count varies
+across tasks, but the rank correlation with consequence is negligible:
+$\rho(\mathrm{thinking}, \mathrm{cons}) = +0.002$ ($p = 0.97$). Hence, the allocation carries essentially no consequence signal.
 
 \textbf{Qwen3-VL-8B-Thinking\footnote{\url{https://huggingface.co/Qwen/Qwen3-VL-8B-Thinking}} (dedicated thinking).} This variant
 produces a separate reasoning stream under a configurable token
-budget. On the same task set, $99.3\%$ of its sampled generations
-reach the \texttt{max\_new\_tokens}$=8192$ cap ($99.7\%$ at a
-$4096$ cap). With essentially every generation saturated, there is
+budget. On the same $300$ tasks, $298/300$ ($99.3\%$) reach the
+\texttt{max\_new\_tokens}$=8192$ cap ($299/300 = 99.7\%$ at a
+$4096$ cap). With essentially every task saturated, there is
 no headroom for consequence-driven differentiation.
 
 \textbf{Claude Sonnet 4.5\footnote{\url{https://www.anthropic.com/claude/sonnet}} with extended thinking.} We evaluate Claude 
@@ -350,8 +351,8 @@ effectively by consequence?
 \toprule
 Model & $n$ & $\mathrm{max\_new}$ & $\rho(\text{thinking}, \text{cons})$ & $p$ & High vs Low & Failure mode \\
 \midrule
-Qwen3-8B (hybrid)              & 50  & 4,096   & +0.002 & n.s.     & ---    & no signal \\
-Qwen3-VL-8B-Thinking           & 50  & 8,192   & ---     & ---      & ---    & 99.3\% saturated \\
+Qwen3-8B (hybrid)              & 300 & 4,096   & +0.002 & n.s.     & ---    & no signal \\
+Qwen3-VL-8B-Thinking           & 300 & 8,192   & ---     & ---      & ---    & 99.3\% saturated \\
 Claude Sonnet 4.5 (ext. think) & 171 & 16,000  & +0.203  & 0.008    & +20.5\% & weak but inadequate \\
 o4-mini (RL reasoning API)     & 171 & 12,000  & +0.239  & 0.002    & +31.4\% & weak but inadequate \\
 DeepSeek-R1 (open CoT API)     & 171 & 24,000  & ---     & ---      & ---    & 54\% saturated (92\% at 8,192) \\
