@@ -40,9 +40,9 @@ $^\ast$Corresponding authors
 Modern reasoning models can allocate different amounts of test-time computation, such as thinking tokens, model calls, or compute budget, to different tasks. Existing methods generally drive this allocation by predicted difficulty and spend more compute where it is expected to raise accuracy. This implicitly assumes that all failures cost the same, since an accuracy objective weights every task equally. However, such an assumption does not hold in deployment: A typo in a log message and a migration that corrupts a production database both count as one benchmark failure, but their real-world costs are fundamentally different. 
 To fill this gap,
 we propose consequence-aware test-time compute allocation. Instead of routing compute by predicted difficulty, we use a lightweight predictor to estimate from the issue text how costly a task would be if solved incorrectly, and weight each task's error by that cost in the allocation objective. The scheduler then routes higher-consequence tasks to larger compute tiers or more attempts under the same total budget. 
-We conduct main experiments on SWE-bench Lite, evaluate cross-dataset behavior on Multi-SWE-bench mini, replicate the full allocation comparison on a disjoint database/ORM pool from SWE-bench Verified, and run an end-to-end out-of-domain probe on BIRD text-to-SQL, covering
-990 tasks in total. Our results reveal that consequence and difficulty are approximately orthogonal under various annotations, and that current thinking models do not allocate compute sufficiently according to consequence. Moreover, our issue-only predictor never misclassifies a high-consequence task as low-consequence, relative to the with-patch reference, on any of the four task pools ($0/97$). 
-Under matched compute budgets --- in a simulation over cached outcomes of $16$ public SWE-bench systems spanning capability tiers --- the fully deployment-time consequence-only scheduler reduces cost-weighted loss by $21.8\%$ ($17.7$--$29.9\%$ across cost mappings) relative to difficulty-aware routing and retains $93.6\%$ of the corresponding oracle gain ($84.3\%$ when anchored at the random baseline); the pattern persists when a single fixed model allocates real best-of-$k$ attempts. A priority-aware variant that additionally uses empirical marginal-gain information reaches a $30.7\%$ reduction, showing the potential value of estimating where extra compute changes the outcome. Finally, the out-of-domain probe confirms the framework's own prediction of when the consequence edge disappears (homogeneous costs) and when difficulty routing stops being penalized (no negative difficulty--gain coupling).
+We conduct main experiments on SWE-bench Lite, evaluate cross-dataset behavior on Multi-SWE-bench mini, replicate the full allocation comparison on a disjoint database/ORM pool from SWE-bench Verified, and run end-to-end out-of-domain probes on BIRD text-to-SQL,
+FinQA financial reasoning, and MATH, covering $1{,}290$ tasks in total. Our results reveal that consequence and difficulty are approximately orthogonal under various annotations, and that current thinking models do not allocate compute sufficiently according to consequence. Moreover, our issue-only predictor never misclassifies a high-consequence task as low-consequence, relative to the with-patch reference, on any of the six task pools ($0/110$). 
+Under matched compute budgets --- in a simulation over cached outcomes of $16$ public SWE-bench systems spanning capability tiers --- the fully deployment-time consequence-only scheduler reduces cost-weighted loss by $21.8\%$ ($17.7$--$29.9\%$ across cost mappings) relative to difficulty-aware routing and retains $93.6\%$ of the corresponding oracle gain ($84.3\%$ when anchored at the random baseline); the pattern persists when a single fixed model allocates real best-of-$k$ attempts. A priority-aware variant that additionally uses empirical marginal-gain information reaches a $30.7\%$ reduction, showing the potential value of estimating where extra compute changes the outcome. Finally, the out-of-domain probes confirm the framework's own predictions of when the consequence edge disappears (homogeneous costs), when no signal helps (no premium headroom), and when difficulty routing prevails (positive difficulty--gain coupling on competition math).
 Notably, difficulty-aware routing with outcome-derived difficulty performs worse than random --- many of the hardest tasks remain unsolved even at the premium tier --- while deployment-time predicted difficulty performs at or slightly above the level of random; on both software-engineering pools, every difficulty-routing variant trails consequence routing.
 \end{abstract}
 \section{Introduction}
@@ -152,9 +152,9 @@ high-consequence task as low-consequence --- across the $300$
 SWE-bench Lite tasks for both predictors, and across all $399$
 judge-labeled Multi-SWE-bench mini tasks for the Qwen predictor
 (\S\ref{sec:pred}, Appendix~\ref{app:crossdataset}). Relative to
-the with-patch reference, the predictor misses $0$ of $97$ true
-high-consequence tasks across the four pools we study (one-sided
-$95\%$ upper bound $3.0\%$; Appendix~\ref{app:predictor}).
+the with-patch reference, the predictor misses $0$ of $110$ true
+high-consequence tasks across the six pools we study (one-sided
+$95\%$ upper bound $2.7\%$; Appendix~\ref{app:predictor}).
 
 \item[(4)] \textbf{Deployment-time consequence routing improves
 cost-weighted allocation, and marginal-gain information improves it
@@ -174,8 +174,11 @@ remain unsolved at every available tier (\S\ref{sec:exp},
 conditions and extends to sequential deployment.} On an
 out-of-domain text-to-SQL pool lacking cost heterogeneity (under
 the primary judge) and the negative difficulty--gain coupling, the
-consequence edge vanishes
-exactly as the objective predicts (Appendix~\ref{app:ood}); and a
+consequence edge vanishes exactly as the objective predicts; on
+finance QA without premium headroom no signal helps; and on
+competition math, where the coupling turns positive, difficulty
+routing wins --- all as prescribed in advance
+(Appendix~\ref{app:ood}). Further, a
 fully deployment-time sequential stack --- consequence-gated attempt
 caps plus a gold-free verifier, with no oracle anywhere --- preserves
 the allocation advantage while cutting realized compute by
@@ -414,8 +417,8 @@ point when misses are far costlier than false alarms
 the allocation results: the $+21.8\%$ deployment gain is achieved
 \emph{with} this imprecise predictor, over-flagged tasks and all.
 Appendix~\ref{app:predictor} reports both ordinal operating points on
-all four pools and the resulting bound on the missed-high-consequence
-rate ($0/97$ across pools; one-sided $95\%$ upper bound $3.0\%$).
+all six pools and the resulting bound on the missed-high-consequence
+rate ($0/110$ across the six pools; one-sided $95\%$ upper bound $2.7\%$).
 
 \textbf{The errors that matter.} For compute allocation, aggregate agreement is not the only criterion. The dangerous error for scheduling is not a small
 label mismatch but a severe under-estimation of risk, namely routing a
@@ -1459,7 +1462,7 @@ deployment-critical high-to-low error on this benchmark.
 \paragraph{Operating characteristics of the ordinal predictor.} The
 three-class predictor admits two alarm thresholds for detecting true
 class-$2$ tasks: flag on $\hat{c}{=}2$, or flag on
-$\hat{c}{\ge}1$. Across the four pools:
+$\hat{c}{\ge}1$. Across the six pools:
 
 \begin{center}
 \small
@@ -1471,6 +1474,8 @@ Lite      & $44$ & $0.89$ / $0.46$ & $1.00$ / $0.18$ \\
 MSWE mini & $3$  & $1.00$ / $0.16$ & $1.00$ / $0.01$ \\
 Verified  & $47$ & $0.96$ / $0.62$ & $1.00$ / $0.37$ \\
 BIRD      & $3$  & $1.00$ / $0.20$ & $1.00$ / $0.03$ \\
+FinQA     & $10$ & $0.60$ / $1.00$ & $1.00$ / $0.09$ \\
+MATH      & $3$  & $0.00$ / --- & $1.00$ / $0.04$ \\
 \bottomrule
 \end{tabular}
 \end{center}
@@ -1485,10 +1490,13 @@ across judge$\times$pool combinations, on which recall $\ge 0.9$ is
 available across a wide threshold band (e.g., deepseek-chat at
 thresholds $50$--$70$: recall $0.91$--$0.98$ at precision
 $0.41$--$0.45$ on Verified). On the safety
-property: across the four pools the predictor has missed $0$ of $97$
-true high-consequence tasks; the one-sided $95\%$ Clopper--Pearson
-upper bound on the miss rate is $3.0\%$, which is the honest
-quantitative content of the ``never misclassifies'' statement.
+property: across the six pools the predictor has missed $0$ of
+$110$ true high-consequence tasks (a miss meaning $2{\to}0$; on
+FinQA and MATH the tasks not recalled at $\hat{c}{=}2$ all landed at
+$\hat{c}{=}1$, still routed above the low class); the one-sided
+$95\%$ Clopper--Pearson upper bound on the miss rate is $2.7\%$,
+which is the honest quantitative content of the ``never
+misclassifies'' statement.
 
 \section{Per-Task Marginal Utility (Excerpt)}
 \label{app:marginal}
@@ -1713,8 +1721,8 @@ conservative class-$0{\to}2$ escalation, which can waste compute but
 never under-protects a high-consequence task. Combined with the
 SWE-bench Lite results (\S\ref{sec:pred}), the Qwen issue-only
 predictor makes zero high-to-low errors across all $699$
-doubly-labeled tasks in the two benchmarks (and $0/97$ across all
-four pools; Appendix~\ref{app:predictor}).
+doubly-labeled tasks in the two benchmarks (and $0/110$ across all
+six pools; Appendix~\ref{app:predictor}).
 
 \paragraph{Why the allocation experiment stays on SWE-bench Lite.}
 Two constraints prevent a matched-compute allocation study on
@@ -1769,9 +1777,9 @@ c{=}2 & 0 & 2  & 45 & 47  \\\hline
 \end{array}
 \]
 Class-$2$ recall is $45/47$ ($95.7\%$) and the deployment-critical
-class-$2{\to}0$ cell is again empty. Across all four pools studied in this paper, the predictor has yet
+class-$2{\to}0$ cell is again empty. Across all six pools studied in this paper, the predictor has yet
 to misclassify a single high-consequence task as low-consequence
-relative to the with-patch reference ($0/97$;
+relative to the with-patch reference ($0/110$;
 Appendix~\ref{app:predictor}).
 
 \paragraph{The allocation ordering replicates exactly.}
@@ -1879,19 +1887,21 @@ governed by how much weight mass the top quartile can hold. The
 deepseek judge marks $77\%$ of Verified tasks class-$2$, flattening
 the weights to a top-$25\%$ share of $0.283$ (a perfectly uniform
 pool gives $0.25$); the consequence-over-random margin is accordingly
-$-0.7\%$. Across all ten pool$\times$weight-source settings in this
-paper (four Lite, four Verified, two BIRD), the top-quartile weight
-share tracks the consequence-over-random margin closely (Spearman
-$+0.84$ for oracle routing, $+0.66$ for the deployment-time
-predictor; presented descriptively --- the ten settings share three
-underlying task pools and are not independent observations, so we
-attach no significance test).
+$-0.7\%$. Across the eleven pool$\times$weight-source settings with usable
+premium headroom (four Lite, four Verified, two BIRD, one MATH), the
+top-quartile weight share tracks the consequence-over-random margin
+closely (Spearman $+0.87$ for oracle routing, $+0.74$ for the
+deployment-time predictor; presented descriptively --- the settings
+share underlying task pools and are not independent observations, so
+we attach no significance test). The no-headroom FinQA pool sits off
+this relationship for the disclosed reason that no routing signal
+can help there; including it still gives $+0.78$.
 The BIRD boundary condition (Appendix~\ref{app:ood}) and this
 judge-swap tie are two instances of the same law: consequence-aware
 allocation pays exactly in proportion to the cost heterogeneity the
 labeler perceives.
 
-\section{Out-of-Domain Probe: Text-to-SQL Analytics (BIRD), End to End}
+\section{Out-of-Domain Probes: Text-to-SQL, Finance, and Mathematics}
 \label{app:ood}
 
 All preceding pools are software-engineering tasks. This appendix
@@ -1921,8 +1931,8 @@ $53.3\%$ (premium), a $+9.3$-point compute headroom.
 
 \paragraph{The predictor transfers; the judges split.} The
 question-only predictor again tracks its with-gold judge at
-$\kappa = 0.568$ (raw $80.0\%$) --- the third of the four pools at
-$\kappa \approx 0.57$ (the base-rate-skewed Multi-SWE-bench mini
+$\kappa = 0.568$ (raw $80.0\%$) --- one of the pools clustered at
+$\kappa \approx 0.5$--$0.66$ (the base-rate-skewed Multi-SWE-bench mini
 pool gives $0.382$; Appendix~\ref{app:crossdataset}) --- with
 class-$2$ recall $3/3$ and an empty
 $2{\to}0$ cell. The judge labels themselves, however, reveal a
@@ -1996,17 +2006,83 @@ Priority-aware (oracle $\times$ empirical gain) & $\mathbf{56.33}$ & $\mathbf{+1
 \end{tabular}
 \end{table}
 
-\paragraph{What this probe establishes.} The SWE-bench results are
+\paragraph{Two further probes: finance and mathematics.} We repeat
+the live two-tier protocol on two more non-software pools, with the
+same Qwen judge and issue-only predictor (byte-consistent two-pass
+prompts, domain-adapted rubrics). \emph{FinQA}
+\citep{chen2021finqa}: $150$ numeric questions over financial-report
+excerpts (gold evidence sentences guaranteed present in the context),
+graded by numeric match with percent/decimal duality. \emph{MATH}
+\citep{hendrycks2021math}: $150$ problems from the MATH-500
+subset~\citep{lightman2023verify}, stratified over the official
+difficulty levels, graded by normalized boxed-answer match. The
+predictor transfers again: $\kappa = 0.661$ on FinQA (the highest of
+any pool) and $0.514$ on MATH, with the $2{\to}0$ cell empty on both
+(five MATH tasks with predictor parse failures are excluded,
+$n{=}145$).
+
+\paragraph{FinQA: no headroom, so no lever.} On FinQA, reasoning
+compute is not ``premium'': o4-mini scores \emph{below} the cheap
+tier ($64.2\%$ vs $66.2\%$) --- an observation of independent
+interest --- and even GPT-4o adds only $+1.1$ points ($67.3\%$).
+With pool-wide headroom near zero, every one-shot routing signal
+lands within noise of random under both judges' weights (the
+consequence rows span $-5.3\%$ to $-1.6\%$ against random), exactly
+as the objective requires: when upgrading helps nowhere, nothing can
+be gained by choosing \emph{where} to upgrade. This is the
+pool-level analogue of the inert thinking-budget lever of
+Appendix~\ref{app:within}.
+
+\paragraph{MATH: positive difficulty--gain coupling, so difficulty
+wins.} On MATH the premium tier has large headroom ($65.3\% \to
+82.3\%$), and the coupling flips sign:
+$\rho(\mathrm{level}, \Delta\mathrm{success}) = +0.257$
+($p = 0.002$) --- harder competition problems benefit \emph{more}
+from the reasoning model, with no unsolvable floor in range.
+Costs are near-homogeneous (the Qwen judge marks $2\%$ class-$2$;
+a stakes-first GPT-4o judge marks all $150$ problems class-$0$,
+collapsing the weighting term entirely). Under these conditions the
+priority objective $\mathrm{cons}\times\Delta$ reduces to
+$\Delta$, which official difficulty tracks --- and indeed
+difficulty-aware routing \emph{wins} on MATH, beating random by
+$+33.7\%$ and consequence-oracle routing ($+20.4\%$ over random,
+via avoidance of zero-weight tasks) by a clear margin. The framework
+prescribes this in advance: on competition math, difficulty is the
+correct routing signal.
+
+\paragraph{The boundary-condition quadrant.} Across the six pools
+the winner of one-shot routing is determined by two measurable
+properties --- cost heterogeneity and the sign of the
+difficulty--gain coupling --- plus the existence of headroom:
+
+\begin{center}
+\small
+\begin{tabular}{lcccl}
+\toprule
+Pool & top-$25\%$ share & $\rho(\mathrm{diff}, \Delta)$ & headroom & best deployable signal \\
+\midrule
+SWE Lite     & $0.42$ & $-0.78$ & yes & consequence \\
+SWE Verified & $0.39$ & $-0.38$ & yes & consequence \\
+BIRD         & $0.35$ & $+0.06$ & modest & none ($\approx$ random) \\
+FinQA        & $0.36$ & $+0.01$ & $\approx$ none & none \\
+MATH         & $0.50$ & $+0.26$ & large & difficulty \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\paragraph{What these probes establish.} The SWE-bench results are
 not a universal claim that difficulty-aware routing always loses;
 they hold when (i) error costs are heterogeneous and (ii) the
-hardest tasks resist premium compute. BIRD realizes the complementary
-regime, and the framework's predictions hold there too: no consequence
-edge without cost heterogeneity, no difficulty penalty without
-negative difficulty--gain coupling, and a consistent win for routing
-by expected cost-weighted marginal gain. That these predictions were
-falsifiable and confirmed end-to-end is, we believe, stronger
-evidence for the framework than a fourth repetition of the headline
-ordering would have been.
+hardest tasks resist premium compute. The three probes realize the
+complementary regimes, and the framework's predictions hold in each:
+no consequence edge without cost heterogeneity (BIRD), no gain from
+any signal without headroom (FinQA), and a difficulty-routing
+\emph{win} where the coupling turns positive (MATH). Four
+falsifiable predictions, confirmed with live inference in three
+non-software domains, are, we believe, stronger evidence for the
+framework than repetitions of the headline ordering would have been:
+consequence routing is best exactly where its preconditions hold,
+and the preconditions are measurable by a deployer.
 
 \section{Within-Model Allocation: Attempts as the Compute Lever}
 \label{app:within}
