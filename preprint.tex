@@ -42,8 +42,8 @@ To fill this gap,
 we propose consequence-aware test-time compute allocation. Instead of routing compute by predicted difficulty, we use a lightweight predictor to estimate from the issue text how costly a task would be if solved incorrectly, and weight each task's error by that cost in the allocation objective. The scheduler then routes higher-consequence tasks to larger compute tiers or more attempts under the same total budget. The premise is an asymmetry we verify empirically: before a task is solved, the cost of getting it wrong is far more predictable than the benefit of spending more compute on it (the latter is near-random ex ante, becoming predictable only with execution feedback). A deployer should therefore route by what is knowable in advance --- the cost of an error --- and the paper's larger message is less ``consequence is a better signal'' than a decision map for \emph{which} signal to route by, whose boundary conditions we state and then confirm out of domain.
 We conduct main experiments on SWE-bench Lite, evaluate cross-dataset behavior on Multi-SWE-bench mini, replicate the full allocation comparison on a disjoint database/ORM pool from SWE-bench Verified, and run end-to-end out-of-domain probes on BIRD text-to-SQL,
 FinQA financial reasoning, and MATH, covering $1{,}290$ tasks in total. Our results reveal that consequence and difficulty are approximately orthogonal under various annotations, and that current thinking models do not allocate compute sufficiently according to consequence. Moreover, our issue-only predictor never misclassifies a high-consequence task as low-consequence, relative to the with-patch reference, on any of the six task pools ($0/110$). 
-Under matched compute budgets --- in a simulation over cached outcomes of $16$ public SWE-bench systems spanning capability tiers --- the fully deployment-time consequence-only scheduler reduces cost-weighted loss by $21.8\%$ ($17.7$--$29.9\%$ across cost mappings) relative to difficulty-aware routing and retains nearly all of the corresponding oracle gain ($93.6\%$ at the reported operating point, subject to tiebreak and sampling noise; App.~\ref{app:bootstrap}); the same ordering holds in a controlled experiment where a single fixed model allocates real best-of-$k$ attempts, isolating compute from model identity. A priority-aware variant that additionally uses empirical marginal-gain information reaches a $30.7\%$ reduction, showing the potential value of estimating where extra compute changes the outcome. Finally, the out-of-domain probes confirm the framework's own predictions of when the consequence edge disappears (homogeneous costs), when no signal helps (no premium headroom), and when difficulty routing prevails (positive difficulty--gain coupling on competition math).
-Notably, difficulty-aware routing with outcome-derived difficulty performs worse than random --- many of the hardest tasks remain unsolved even at the premium tier --- while deployment-time predicted difficulty performs at or slightly above the level of random; on both software-engineering pools, every difficulty-routing variant trails consequence routing.
+Under matched compute budgets --- in a simulation over cached outcomes of $16$ public SWE-bench systems spanning capability tiers --- the fully deployment-time consequence-only scheduler reduces cost-weighted loss by $21.8\%$ ($17.7$--$29.9\%$ across cost mappings) relative to difficulty-aware routing and retains nearly all of the corresponding oracle gain ($93.6\%$ at the reported operating point, subject to tiebreak and sampling noise; App.~\ref{app:bootstrap}); the same ordering holds in a controlled experiment where a single fixed model allocates real best-of-$k$ attempts, isolating compute from model identity. A priority-aware variant that additionally uses empirical marginal-gain information reaches a $30.7\%$ reduction (an analysis upper bound; a split-half re-estimate shrinks the priority rows by $6$--$7$ points), showing the potential value of estimating where extra compute changes the outcome. Finally, the out-of-domain probes confirm the framework's own predictions of when the consequence edge disappears (homogeneous costs), when no signal helps (no premium headroom), and when difficulty routing prevails (positive difficulty--gain coupling on competition math).
+Notably, difficulty-aware routing with outcome-derived difficulty performs worse than random --- many of the hardest tasks remain unsolved even at the premium tier --- while deployment-time predicted difficulty performs at the level of random; on both software-engineering pools, every difficulty-routing variant trails consequence routing.
 \end{abstract}
 \section{Introduction}
 \label{sec:intro}
@@ -133,7 +133,8 @@ that current models underuse it.
 
 \begin{itemize}
 \item[(1)] \textbf{Consequence is not difficulty, nor a disguised
-confidence signal.} On $300$ SWE-bench Lite tasks, consequence
+confidence signal.} On $300$ SWE-bench Lite tasks ($75$ for the
+human-majority study), consequence
 remains weakly correlated with difficulty ($|\rho| \le 0.11$)
 across rule-based, LLM-with-patch, issue-only, and human-majority
 labels, and is not reducible to cross-model disagreement: controlling
@@ -326,10 +327,10 @@ Here thinking length does correlate with consequence at a statistically
 significant level ($\rho = +0.203$, $p = 0.008$), but the effect is far
 too small to match the stakes.  High-consequence (class~2) tasks receive only 20.5\% more thinking than low-consequence (class~0) tasks (6135 vs 5090 characters on average).
 Yet the stakes ratio the objective implies is far larger than the
-effort ratio the model reveals: the median class-$2$ task carries
-twice the cost-weighted value of the median class-$1$ task ($1.0$ vs
-$0.5$ under the $\{0,1,2\}$ mapping, and unboundedly more than
-class-$0$), against a revealed thinking ratio of only $1.2$:$1$.  Claude thus shows a weak emergent tendency
+effort ratio the model reveals: under the $\{0,1,2\}$ mapping the
+median class-$2$ task carries unboundedly more cost-weighted value than
+a class-$0$ task (and twice that of class-$1$), against a revealed
+class-$2$-vs-class-$0$ thinking ratio of only $1.2$:$1$.  Claude thus shows a weak emergent tendency
 toward consequence-aware allocation that is quantitatively inadequate for
 deployment.
 
@@ -380,7 +381,7 @@ allocation nor the deployer-facing thinking-budget knob delivers
 consequence-sensitive compute, so consequence-awareness must be
 introduced at the scheduler level, over levers with real headroom ---
 model tiers (\S\ref{sec:exp}) and repeated attempts
-(Appendix~\ref{app:within}). This motivates the question: how should
+(\S\ref{sec:withinmain}). This motivates the question: how should
 a deployer wrap a reasoning model so that it allocates compute
 effectively by consequence?
 
@@ -555,8 +556,8 @@ recover the Snell-style difficulty-aware baseline.
 \label{sec:exp}
 
 We evaluate Algorithm~\ref{alg:cons-route} with two complementary main
-experiments that trade off realism against control. The first
-(\S\ref{sec:exp}) routes tasks across a $16$-model SWE-bench
+experiments that trade off realism against control. The first (this
+section) routes tasks across a $16$-model SWE-bench
 capability tier: a large-scale, deployment-flavored ladder, but one in
 which ``more compute'' is confounded with model generation and
 scaffold. The second (\S\ref{sec:withinmain}) removes that confound by
@@ -1055,15 +1056,17 @@ release branches at five times the rate of class-$0$ fixes ($41.9\%$
 vs.\ $8.3\%$, ordered trend $p = 0.0001$), a gradient that persists
 within backporting repositories (Appendix~\ref{app:realcost}).
 
-\textbf{Scope of evaluation.} Our main allocation experiment uses
-publicly available per-task outcomes from 16 SWE-bench Lite leaderboard
-solvers. This design allows us to compare many compute tiers on the
-same task set and to estimate per-task marginal gains from upgrading
-cheap models to premium models. However, it is still an offline
-compute-tier study rather than a fully controlled intervention on a
-single reasoning model. As controlled supporting evidence, Appendix~\ref{app:within} repeats
-the allocation experiment with a single fixed Claude Sonnet~4.5 agent,
-varying only test-time compute (oracle best-of-$k$ attempts). The same qualitative ordering is reproduced: consequence-aware and
+\textbf{Scope of evaluation.} Our two main allocation experiments use
+(i)~publicly available per-task outcomes from 16 SWE-bench Lite
+leaderboard solvers and (ii)~a controlled single-model best-of-$k$
+study (\S\ref{sec:withinmain}). The first lets us compare many compute
+tiers on the same task set and estimate per-task marginal gains from
+upgrading cheap models to premium models, but it is an offline
+compute-tier study rather than a controlled intervention on a single
+reasoning model. The second (\S\ref{sec:withinmain}; full protocol and
+deployment-time, no-oracle extensions in Appendix~\ref{app:within})
+removes that confound by holding the model, prompt, and thinking budget
+fixed and varying only the number of best-of-$k$ attempts. The same qualitative ordering is reproduced: consequence-aware and
 priority-aware routing beat the difficulty-aware baseline, which is
 again worse than random. Appendix~\ref{app:seconddomain} further
 repeats the full allocation comparison on a consequence-rich pool of
@@ -1138,7 +1141,10 @@ reasoning model.
 
 On a 16-model SWE-bench compute-tier benchmark, the fully
 deployment-time consequence-only router reduces cost-weighted loss by
-$21.8\%$ relative to difficulty-aware routing. A priority-aware
+$21.8\%$ relative to difficulty-aware routing; a controlled experiment
+that holds the model, prompt, and thinking budget fixed while varying
+only best-of-$k$ attempts reproduces the same ordering
+(\S\ref{sec:withinmain}). A priority-aware
 variant that additionally uses empirical marginal gain reaches a
 $30.7\%$ reduction (an analysis upper bound; a split-half
 re-estimate shrinks the priority rows by $6$--$7$ points), showing the potential
@@ -1394,7 +1400,10 @@ identity is partly a nuisance stratum, but it is also itself
 consequence-bearing --- a production web framework and a symbolic
 mathematics library differ precisely in deployment blast radius, which
 is what the label is supposed to measure. Neither reading threatens
-the within-repository trend, which is positive and significant.
+the within-repository trend, which is positive throughout and, among
+the backporting repositories, a significant ordered trend
+($\rho = +0.175$, $p = 0.024$), though the repository-stratified CMH
+contrast is underpowered ($\mathrm{OR} = 1.76$, $p = 0.14$).
 The association is not an artifact of PR age
 ($\rho(\mathrm{class}, \mathrm{year}) = +0.089$, n.s.;
 $\rho(\mathrm{backported}, \mathrm{year}) = +0.031$, n.s.).
@@ -1431,9 +1440,10 @@ encodes release-cycle timing rather than deployment blast radius ---
 and we report it as a null. Most usefully, Trac carries the
 maintainers' own \emph{difficulty} proxy, an ``easy pickings'' flag:
 it is orthogonal to the consequence label
-($\rho(\mathrm{consequence}, \mathrm{easy}) = -0.12$, n.s.), an
-\emph{independent, non-LLM} confirmation of the paper's central
-claim that consequence is not a relabeling of difficulty
+($\rho(\mathrm{consequence}, \mathrm{easy}) = -0.12$, n.s.; at
+$n{=}114$ this null has $80\%$ power only against $|\rho| \gtrsim 0.26$),
+\emph{independent, non-LLM} evidence consistent with the paper's
+central claim that consequence is not a relabeling of difficulty
 (\S\ref{sec:cons}). Across both anchors the same conclusion holds:
 the consequence labels are not merely an LLM's private construct ---
 they align with what human maintainers did (backport) and how human
@@ -1994,7 +2004,13 @@ std $3.34$, every draw beating difficulty-aware). The ordering is
 identical to Table~\ref{tab:main}: difficulty-aware is again the
 worst strategy --- below random --- and consequence- and
 priority-based routing recover the same relative gains on an
-independent pool with an independent tier system.
+independent pool with an independent tier system. The difficulty-aware
+row uses oracle difficulty ($1-\overline{\mathrm{passrate}}$), which is
+maximally wasteful here because it targets the never-solved floor
+exactly; deployment-time \emph{estimated} difficulty on this pool lands
+near random ($\hat{d}$ ensemble loss $135.00$ vs random $135.61$;
+Appendix~\ref{app:marginal}), so oracle difficulty is the strongest,
+not a strawman, difficulty signal.
 
 \begin{table}[h]
 \centering
@@ -2008,7 +2024,7 @@ Table~\ref{tab:main} replicates exactly.}
 \toprule
 Strategy & $\mathcal{L}$ & $\Delta$ vs Diff \\
 \midrule
-Difficulty-aware                            & $154.75$ & ~~$0\%$ baseline \\
+Difficulty-aware (oracle difficulty)        & $154.75$ & ~~$0\%$ baseline \\
 Random (mean over $1{,}000$ draws)          & $135.61$ & $+12.4\%$ \\
 Consequence-aware (Qwen2.5 issue-only)      & $131.75$ & $+14.9\%$ \\
 Consequence-aware (with-patch oracle)       & $121.00$ & $+21.8\%$ \\
@@ -2244,18 +2260,22 @@ wins.} On MATH the premium tier has large headroom ($65.3\% \to
 $\rho(\mathrm{level}, \Delta\mathrm{success}) = +0.257$
 ($p = 0.002$) --- harder competition problems benefit \emph{more}
 from the reasoning model, with no unsolvable floor in range.
-Costs are near-homogeneous (the Qwen judge marks $2\%$ class-$2$;
-a stakes-first GPT-4o judge marks all $150$ problems class-$0$,
-collapsing the weighting term entirely). Under these conditions the
-priority objective $\mathrm{cons}\times\Delta$ reduces to
-$\Delta$, which official difficulty tracks --- and indeed
-difficulty-aware routing \emph{wins} on MATH, beating random by
-$+33.7\%$ and consequence-oracle routing ($+20.4\%$ over random,
-via avoidance of zero-weight tasks) by a clear margin. The framework
+Catastrophic (class-$2$) outliers are rare (the Qwen judge marks only
+$2\%$; a stakes-first GPT-4o judge marks all $150$ problems class-$0$),
+so competition math carries little of the cost heterogeneity the
+consequence signal exploits. Under the GPT-4o judge consequence is
+constant across all $150$ problems, so it cannot discriminate tasks and
+the priority ranking $\mathrm{cons}\times\Delta$ is governed by the
+$\Delta$ term alone, which official difficulty tracks. Under the Qwen
+weights, which do vary, the consequence edge over random ($+20.4\%$)
+comes from concentrating premium on the few nonzero-weight tasks rather
+than from tracking $\Delta$. Either
+way, difficulty-aware routing \emph{wins} on MATH, beating random by
+$+33.7\%$ and consequence-oracle routing by a clear margin. The framework
 prescribes this in advance: on competition math, difficulty is the
 correct routing signal.
 
-\paragraph{The boundary-condition quadrant.} Across the six pools
+\paragraph{The boundary-condition quadrant.} Across the five routed pools
 the winner of one-shot routing is determined by two measurable
 properties --- cost heterogeneity and the sign of the
 difficulty--gain coupling --- plus the existence of headroom:
@@ -2396,13 +2416,13 @@ route by.
 \section{Within-Model Allocation: Attempts as the Compute Lever}
 \label{app:within}
 
-The main allocation experiment (\S\ref{sec:exp}) varies compute by
-routing tasks across a $16$-model tier. A natural question is whether
-the advantage of consequence-aware allocation is specific to
-\emph{model-tier routing}, or whether it survives when the model is
-held fixed and only the test-time compute budget is varied. This
-appendix answers the latter: we fix a single agent and vary
-\emph{test-time compute alone}.
+The first main experiment (\S\ref{sec:exp}) varies compute by
+routing tasks across a $16$-model tier, where ``more compute'' is
+confounded with model identity. The co-main experiment of
+\S\ref{sec:withinmain} removes that confound by fixing a single agent
+and varying \emph{test-time compute alone}; this appendix gives its
+full protocol, the choice of compute lever, both judges, and the
+dynamic-scheduling and no-oracle extensions.
 
 \paragraph{Which compute lever.} Two within-model levers are natural:
 the thinking-token budget, and the number of attempts (best-of-$k$
@@ -2495,10 +2515,10 @@ predictor as the main table, which sees neither the gold patch nor
 any attempt outcome --- reaches $29.0$ ($+19.4\%$), still ahead of
 random, and the predictor-based priority variant reaches $27.0$
 ($+25.0\%$). Because the model, prompt, and thinking budget are all held fixed and
-only the number of attempts is allocated, this provides controlled
-supporting evidence that the allocation advantage is not purely an
-artifact of routing across different model tiers. The same pattern
-appears when consequence governs test-time compute within a single
+only the number of attempts is allocated, this controlled experiment
+establishes that the allocation advantage is not an
+artifact of routing across different model tiers: the same pattern
+holds when consequence governs test-time compute within a single
 fixed agent.
 
 \begin{table}[h]
@@ -2611,12 +2631,14 @@ of the two outcome judges, so correlated errors could flatter the
 deepseek-judge arm; the Claude-judge arm, where verifier and judge
 are disjoint families, is the primary reading.
 
-\paragraph{Judge robustness (original sample).} On the original
-$48$-task sample, whose table above is graded by the Claude judge
-alone, we re-graded all $396$ attempts with a judge from a different
-model family (\texttt{deepseek-chat}) under the identical judging
-prompt (the scaled analyses above already use both judges
-throughout; this paragraph documents the attempt-level agreement). The two
+\paragraph{Judge robustness (original sample).} The table above is
+graded by the Claude judge alone. To check that this does not drive the
+result, we re-graded all $396$ generated attempts (across the $60$-task
+pool from which the original $48$-task sample is drawn) with a judge
+from a different model family (\texttt{deepseek-chat}) under the
+identical judging prompt (the scaled analyses above already use both
+judges throughout; this paragraph documents the attempt-level
+agreement). The two
 judges agree on $91.3\%$ of attempts (Cohen's $\kappa = 0.630$),
 with the DeepSeek judge somewhat stricter (pass rate $0.115$ vs
 $0.156$). Recomputing the full allocation comparison under the
@@ -2679,8 +2701,8 @@ results reproduce the offline boundary predictions exactly
 two \emph{non-software} regimes where the quadrant says consequence
 should \emph{not} be the winning signal, and it is not: dominated by
 MATH's positive difficulty--gain coupling, the live difficulty router
-wins ($-32.7\%$ realized dollar-weighted loss vs.\ random),
-consequence-aware routing beats random ($-18.8\%$; paired bootstrap
+wins ($32.7\%$ lower realized dollar-weighted loss than random),
+consequence-aware routing beats random ($18.8\%$ lower; paired bootstrap
 $P = 92\%$) but not difficulty, and FinQA contributes no separation
 at all (all arms within $\pm6\%$, the no-headroom regime). The
 per-pool split is unambiguous --- MATH: difficulty $5{,}516$,
@@ -2701,12 +2723,12 @@ premium budget.}
 \small
 \begin{tabular}{lrrrl}
 \toprule
-Policy & DWL & vs.\ random & premium & accuracy \\
+Policy & DWL & loss red.\ vs.\ random & premium & accuracy \\
 \midrule
 \textsc{random}      & $24{,}426$ & $0\%$      & $23.0\%$ & $70.0\%$ \\
-\textsc{diff}        & $\mathbf{16{,}432}$ & $\mathbf{-32.7\%}$ & $25.3\%$ & $70.7\%$ \\
-\textsc{cons}        & $19{,}831$ & $-18.8\%$ & $19.3\%$ & $68.7\%$ \\
-\textsc{seq} (verifier-gated) & $21{,}627$ & $-11.5\%$ & $\mathbf{5.0\%}$ & $70.0\%$ \\
+\textsc{diff}        & $\mathbf{16{,}432}$ & $\mathbf{+32.7\%}$ & $25.3\%$ & $70.7\%$ \\
+\textsc{cons}        & $19{,}831$ & $+18.8\%$ & $19.3\%$ & $68.7\%$ \\
+\textsc{seq} (verifier-gated) & $21{,}627$ & $+11.5\%$ & $\mathbf{5.0\%}$ & $70.0\%$ \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -2716,7 +2738,7 @@ verifier-gated \textsc{seq} policy is the operational payoff. Its
 gold-free verifier scored the cheap-tier attempts confidently
 (mean $9.3/10$) and triggered escalation on only $15/300$ tasks, so
 \textsc{seq} shipped at $5.0\%$ premium utilization --- against
-$23$--$25\%$ for the one-shot routers --- while \emph{matching}
+$19$--$25\%$ for the one-shot routers --- while \emph{matching}
 their unweighted accuracy ($70.0\%$, identical to random,
 within $0.7$ points of difficulty). On a stream where the premium
 tier buys little average accuracy, the live closed loop correctly
