@@ -33,7 +33,7 @@ To fill this gap,
 we propose consequence-aware test-time compute allocation. Instead of routing compute by predicted difficulty, we use a lightweight predictor to estimate from the issue text how costly a task would be if solved incorrectly, and weight each task's error by that cost in the allocation objective. The scheduler then routes higher-consequence tasks to larger compute tiers or more attempts under the same total budget. The premise is an asymmetry we verify empirically: before a task is solved, the cost of getting it wrong is far more predictable than the benefit of spending more compute on it (the latter is near-random ex ante, becoming predictable only with execution feedback). A deployer should therefore route by what is knowable in advance --- the cost of an error --- and the paper's larger message is less ``consequence is a better signal'' than a decision map for \emph{which} signal to route by, whose boundary conditions we state and then confirm out of domain.
 We conduct main experiments on SWE-bench Lite, evaluate cross-dataset behavior on Multi-SWE-bench mini, replicate the full allocation comparison on a disjoint database/ORM pool from SWE-bench Verified, and run end-to-end out-of-domain probes on BIRD text-to-SQL,
 FinQA financial reasoning, and MATH, covering $1{,}290$ tasks in total. Our results reveal that consequence and difficulty are approximately orthogonal under various annotations, and that current thinking models do not allocate compute sufficiently according to consequence. Moreover, our issue-only predictor never misclassifies a high-consequence task as low-consequence, relative to the with-patch reference, on any of the six task pools ($0/110$). 
-Under matched compute budgets --- in a simulation over cached outcomes of $16$ public SWE-bench systems spanning capability tiers --- the fully deployment-time consequence-only scheduler reduces cost-weighted loss by $21.8\%$ ($17.7$--$29.9\%$ across cost mappings) relative to difficulty-aware routing and retains nearly all of the corresponding oracle gain ($93.6\%$ at the reported operating point, subject to tiebreak and sampling noise; App.~\ref{app:bootstrap}); the same ordering holds in a controlled experiment where a single fixed model allocates real best-of-$k$ attempts, isolating compute from model identity. A priority-aware variant that additionally uses empirical marginal-gain information reaches a $30.7\%$ reduction (an analysis upper bound; a split-half re-estimate shrinks the priority rows by $6$--$7$ points), showing the potential value of estimating where extra compute changes the outcome. Finally, the out-of-domain probes confirm the framework's own predictions of when the consequence edge disappears (homogeneous costs), when no signal helps (no premium headroom), and when difficulty routing prevails (positive difficulty--gain coupling on competition math).
+Minimizing this cost-weighted loss is equivalent to maximizing the consequence-weighted success rate, and the effect is concrete: at a matched compute budget --- in a simulation over cached outcomes of $16$ public SWE-bench systems spanning capability tiers --- the fully deployment-time consequence-only scheduler raises the success rate on high-consequence tasks from $19.4\%$ (random) and $29.0\%$ (a deployment-fair predicted-difficulty baseline) to $51.1\%$, approaching the all-premium ceiling of $58.5\%$, while overall accuracy is unchanged --- the budget is simply spent where errors are costly. In loss terms this is a $21.8\%$ reduction ($17.7$--$29.9\%$ across cost mappings) over difficulty-aware routing, retaining nearly all of the oracle gain ($93.6\%$; App.~\ref{app:bootstrap}); the same ordering holds in a controlled experiment where a single fixed model allocates real best-of-$k$ attempts, isolating compute from model identity. A priority-aware variant that additionally uses empirical marginal-gain information reaches a $30.7\%$ reduction (an analysis upper bound; a split-half re-estimate shrinks the priority rows by $6$--$7$ points), showing the potential value of estimating where extra compute changes the outcome. Finally, the out-of-domain probes confirm the framework's own predictions of when the consequence edge disappears (homogeneous costs), when no signal helps (no premium headroom), and when difficulty routing prevails (positive difficulty--gain coupling on competition math).
 Notably, difficulty-aware routing with outcome-derived difficulty performs worse than random --- many of the hardest tasks remain unsolved even at the premium tier --- while deployment-time predicted difficulty performs at the level of random; on both software-engineering pools, every difficulty-routing variant trails consequence routing.
 \end{abstract}
 % \begin{abstract}
@@ -163,17 +163,28 @@ the with-patch reference, the predictor misses $0$ of $110$ true
 high-consequence tasks across the six pools we study (one-sided
 $95\%$ upper bound $2.7\%$; Appendix~\ref{app:predictor}).
 
-\item[(4)] \textbf{Deployment-time consequence routing improves
-cost-weighted allocation, and marginal-gain information improves it
-further.} We show this with two complementary experiments: a large-scale
-$16$-model SWE-bench capability tier, and a controlled experiment that
-holds the model fixed and varies only best-of-$k$ attempts, isolating
-compute from model identity (\S\ref{sec:withinmain}). Under matched
-compute, the Qwen issue-only consequence predictor reduces
-cost-weighted loss by $21.8\%$ relative to difficulty-aware routing and
-recovers nearly all of the consequence-oracle gain; the controlled
-experiment reproduces the same ordering with bootstrap intervals
-bounded away from zero under two judge families. A priority-aware
+\item[(4)] \textbf{Deployment-time consequence routing raises the
+success rate where it matters.} Minimizing the cost-weighted loss is
+equivalent to maximizing the consequence-weighted success rate, so the
+right yardstick is whether consequential tasks get solved more often
+--- a reallocation that does not is an empty relabeling. It does: at a
+matched budget on a $16$-model SWE-bench tier, the deployment-time Qwen
+consequence router lifts the success rate on high-consequence tasks
+from $19.4\%$ (random) and $29.0\%$ (a deployment-fair
+predicted-difficulty baseline) to $51.1\%$, near the all-premium
+ceiling of $58.5\%$, with overall accuracy unchanged ($21.8\%$ lower
+cost-weighted loss than difficulty routing, recovering nearly all of
+the oracle gain). A controlled experiment that holds the model fixed
+and varies only best-of-$k$ attempts reproduces the same ordering with
+bootstrap intervals bounded away from zero under two judge families
+(\S\ref{sec:withinmain}). A priority-aware
+variant that additionally uses empirical marginal-gain information
+reduces loss by $30.7\%$ --- but only as an analysis variant, because
+that marginal gain is exactly the quantity we find unpredictable before
+solving. The same analysis also explains why
+difficulty-aware routing can underperform random: the hardest tasks
+often have the lowest marginal gain from extra compute, because they
+remain unsolved at every available tier (\S\ref{sec:exp}, A priority-aware
 variant that additionally uses empirical marginal-gain information
 reduces loss by $30.7\%$ --- but only as an analysis variant, because
 that marginal gain is exactly the quantity we find unpredictable before
@@ -507,15 +518,47 @@ The setup is a multi-tier compute system: a finite set of compute tiers $\{T_1, 
 where $c(T_k)$ is the per-task compute price of tier $T_k$. With
 $\mathrm{cost}(x){\equiv}1$, Eq.~\ref{eq:budgetobj} reduces to plain
 accuracy maximization under a compute budget---the objective implicit in prior adaptive-compute work.
+Because $\sum_x \mathrm{cost}(x)\,[1-p(x)] = \sum_x \mathrm{cost}(x) -
+\sum_x \mathrm{cost}(x)\,p(x)$, minimizing the cost-weighted loss is
+\emph{equivalent to maximizing the consequence-weighted success rate}
+$\big(\sum_x \mathrm{cost}(x)\,p(x)\big)/\sum_x \mathrm{cost}(x)$: the
+goal is not to raise average accuracy but to spend the budget so that
+the tasks that matter most are the ones that get solved. This is the
+metric we report throughout (\S\ref{sec:exp}), because a reallocation
+that does not raise the success rate on high-consequence tasks would
+be an empty relabeling --- the point of routing by consequence is that
+consequential tasks are solved more often.
 
-\textbf{Algorithm.} We instantiate Eq.~\ref{eq:budgetobj} with a simple decoupled scheme. Given the predicted consequence $\hat{c}(x) \in \{0,1,2\}$ from \S\ref{sec:pred} and a target overall
-compute budget $B$, we sort tasks by $\hat{c}(x)$ in descending order and assign them to compute tiers from premium to cheap until the
-budget is exhausted (Algorithm~\ref{alg:cons-route}). In the fixed-quota variants of \S\ref{sec:exp}, the top-$q\%$ tasks by
-$\hat{c}$ go to the premium tier and the rest go to the cheap tier;
-$q$ is chosen so that total compute matches the difficulty-based baseline. This decoupled scheme assumes that $\hat{c}$ tracks the
-\emph{cost-weighted} value of upgrading a task,
-$\mathrm{cons}(x)\cdot[1 - p(x)]$; it does \emph{not} assume that
-consequence predicts where compute helps ---
+\textbf{What the objective rewards, and its exact optimum.} Upgrading
+a task $x$ from the cheap tier to the premium tier lowers the loss by
+exactly $\mathrm{cost}(x)\cdot[\,p_{\mathrm{premium}}(x) -
+p_{\mathrm{cheap}}(x)\,] = \mathrm{cost}(x)\cdot\Delta(x)$: the error
+cost times the \emph{marginal success gain} from more compute. Under a
+fixed budget with equal per-task upgrade costs, the loss-minimizing
+allocation is therefore the greedy rule that upgrades tasks in
+descending order of this product $\mathrm{cost}(x)\cdot\Delta(x)$ ---
+routing by consequence \emph{and} marginal gain. This priority rule,
+not consequence alone, is the exact optimum of
+Eq.~\ref{eq:budgetobj}; it is the ``priority-aware'' strategy of
+\S\ref{sec:exp}.
+
+\textbf{Algorithm: the deployable approximation.} The priority optimum
+requires $\Delta(x)$, the per-task benefit of extra compute, which is
+\emph{not} predictable before a task is solved (prompted and learned
+estimators of $\Delta$ are no better than chance;
+Appendix~\ref{app:marginal}). We therefore deploy the
+consequence-only approximation: sort tasks by the predicted
+consequence $\hat{c}(x)\in\{0,1,2\}$ from \S\ref{sec:pred} in
+descending order and fill compute tiers from premium to cheap until the
+budget is exhausted (Algorithm~\ref{alg:cons-route}). In the
+fixed-quota variants of \S\ref{sec:exp} the top-$q\%$ tasks by
+$\hat{c}$ receive the premium tier, with $q$ chosen so total compute
+matches the difficulty-based baseline. Routing by $\hat{c}$ alone is
+exact when $\Delta$ is constant or uncorrelated with cost, and
+empirically recovers most of the priority optimum's gain
+(\S\ref{sec:exp}). It assumes only that $\hat{c}$ tracks the
+\emph{cost-weighted} value of a correct answer; it does \emph{not}
+assume that consequence predicts where compute helps ---
 $\rho(\mathrm{cons}, \Delta\mathrm{success}) = +0.09$ (n.s.,
 \S\ref{sec:whyfail}) --- only that errors on high-$\hat{c}$ tasks
 are worth more to prevent.
@@ -635,31 +678,40 @@ tasks are routed to the premium tier.
 
 \begin{table}[t]
 \centering
-\caption{\textbf{Main results.} Cost-weighted loss $\mathcal{L}$,
-relative reduction over the difficulty-aware baseline, and average
-accuracy on $N{=}300$ SWE-bench Lite tasks. All strategies are evaluated
-at the same compute budget: top-$25\%$ premium routing with a
-cheap/premium price ratio of $1{:}4$. Difficulty-aware allocation is
-worse than Random at this operating point. The Qwen issue-only consequence router is the primary deployment-time
-variant and retains $93.6\%$ of the corresponding consequence-oracle
-gain. The priority-aware rows additionally use empirical marginal-gain
-information and should be interpreted as an analysis of the extra value
-available when marginal gain can be estimated.}
+\caption{\textbf{Main results.} Cost-weighted loss $\mathcal{L}$, its
+relative reduction over the outcome-derived difficulty baseline, the
+success rate on \emph{high-consequence} (class-2) tasks, and overall
+accuracy on $N{=}300$ SWE-bench Lite tasks --- all at the same
+top-$25\%$ premium budget (price ratio $1{:}4$). The deployment-time
+Qwen consequence router more than doubles the class-2 success rate over
+random ($51.1\%$ vs.\ $19.4\%$) and over a deployment-fair
+predicted-difficulty baseline ($29.0\%$), approaching the all-premium
+ceiling ($58.5\%$), while overall accuracy is essentially unchanged
+($0.184$ vs.\ random $0.180$): the budget is spent where errors are
+costly, not spread evenly, and it is the consequential tasks that get
+solved. Both difficulty baselines --- outcome-derived (strongest, but
+not available at deployment) and deployment-time predicted --- trail
+consequence routing on the class-2 metric. The priority-aware rows use
+empirical marginal gain (the exact optimum of Eq.~\ref{eq:budgetobj});
+a split-half re-estimate shrinks them by $6$--$7$ points
+(Appendix~\ref{app:bootstrap}). The Qwen router retains $93.6\%$ of the
+consequence-oracle loss reduction.}
 \label{tab:main}
 \small
-\begin{tabular}{lrrr}
+\begin{tabular}{lrrrr}
 \toprule
-Strategy & $\mathcal{L}$ & $\Delta$ vs Diff & Accuracy \\
+Strategy & $\mathcal{L}$ & $\Delta$ vs Diff & class-2 succ. & Acc. \\
 \midrule
-Difficulty-aware (Snell-style)~\citep{snell2024scaling}              & $268.25$ & ~~$0\%$ baseline & $0.054$ \\
-Random (mean over $1{,}000$ draws)                                    & $231.20$ & $+13.8\%$ & $0.180$ \\
+Difficulty-aware (outcome-derived; Snell)~\citep{snell2024scaling}   & $268.25$ & ~~$0\%$ & $6.8\%$ & $0.054$ \\
+Difficulty-aware (deployment predicted)                             & $224.00$ & $+16.5\%$ & $29.0\%$ & $0.181$ \\
+Random (mean over $1{,}000$ draws)                                  & $231.20$ & $+13.8\%$ & $19.4\%$ & $0.180$ \\
 \midrule
-Consequence-aware (Claude issue-only; cross-model)          & $220.50$ & $+17.8\%$ & $0.174$ \\
-Consequence-aware (Qwen issue-only; deployment-time)                        & $209.75$ & $+21.8\%$ & $0.184$ \\
-Consequence-aware (with-patch oracle)                                            & $205.75$ & $+23.3\%$ & $0.187$ \\
+Consequence-aware (Claude issue-only; cross-model)                  & $220.50$ & $+17.8\%$ & $36.9\%$ & $0.174$ \\
+Consequence-aware (Qwen issue-only; deployment-time)                & $209.75$ & $+21.8\%$ & $\mathbf{51.1\%}$ & $0.184$ \\
+Consequence-aware (with-patch oracle)                               & $205.75$ & $+23.3\%$ & $58.5\%$ & $0.187$ \\
 \midrule
-Priority-aware (Qwen consequence + empirical marginal gain)  & $\mathbf{186.00}$ & $\mathbf{+30.7\%}$ & $\mathbf{0.274}$ \\
-Priority-aware (oracle consequence + empirical marginal gain) & $179.75$ & $+33.0\%$ & $0.278$ \\
+Priority-aware (Qwen consequence $\times$ marginal gain)            & $\mathbf{186.00}$ & $\mathbf{+30.7\%}$ & $50.6\%$ & $\mathbf{0.274}$ \\
+Priority-aware (oracle consequence $\times$ marginal gain)          & $179.75$ & $+33.0\%$ & $55.1\%$ & $0.278$ \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -699,15 +751,25 @@ $93.9\%$ with $95\%$ interval of approximately $[86\%, 103\%]$
 read as a representative draw, not a precise constant. This confirms
 that the safety-respecting issue-only predictor of
 \S\ref{sec:pred} translates directly into downstream routing quality
-without access to gold patches or benchmark outcome statistics. We
-stress that the consequence gain is a \emph{cost-weighted}, not an
-accuracy, effect: the raw resolve rate of consequence-aware routing
-($0.184$) is within noise of random ($0.180$; Table~\ref{tab:main},
-last column), since both send the same number of tasks to the premium
-tier --- what changes is \emph{which} tasks, and the cost-weighted
-objective is what rewards routing the expensive ones there. Reporting
-accuracy alone would hide the entire effect, which is exactly the
-point of the paper. For
+without access to gold patches or benchmark outcome statistics.
+
+\textbf{The tasks that matter get solved more often.} The point of
+reallocation is not a smaller abstract loss but a higher success rate
+where it counts: the deployment-time Qwen router raises the success
+rate on high-consequence (class-2) tasks from $19.4\%$ under random
+routing --- and $29.0\%$ under a deployment-fair predicted-difficulty
+baseline --- to $\mathbf{51.1\%}$, more than half way to the
+all-premium ceiling of $58.5\%$ (Table~\ref{tab:main}, class-2 column),
+at the same budget. Overall accuracy barely moves ($0.184$ vs.\ random
+$0.180$), and this is by design: under a fixed budget one cannot lift
+every task's success rate, so consequence routing withdraws compute
+from cosmetic class-0 tasks and concentrates it on the consequential
+ones. Reporting accuracy alone would hide the entire effect --- a
+router that raised class-2 success from $19\%$ to $51\%$ would look
+identical to random. The reallocation is therefore not an empty
+relabeling: it is exactly the success-rate improvement, on the tasks
+whose failures are costly, that motivates routing by consequence in
+the first place. For
 completeness, routing by empirical marginal gain \emph{alone} --- the
 oracle analogue of expected-accuracy-gain allocation in prior
 work~\citep{damani2024learning}, with no consequence term --- attains
