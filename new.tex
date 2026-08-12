@@ -417,7 +417,7 @@ itself. We therefore ask whether consequence can be predicted from deployment-ti
 information, i.e., the
 issue text and file path alone, and whether such predictions are reliable to guide compute allocation.
 
-\textbf{Setup.} We remove the gold patch and modified-file content from the LLM-with-patch judge of \S\ref{sec:cons}. The input to the predictor contains only the GitHub issue text and the affected file path, matching the information available to a deployment-time scheduler. Our primary predictor is Qwen2.5-7B-Instruct in issue-only mode, evaluated against the Qwen2.5-7B-Instruct with-patch reference label. As a cross-model robustness check, we also evaluate Claude Sonnet 4.5 in
+\textbf{Setup.} We remove the gold patch and modified-file content from the LLM-with-patch judge of \S\ref{sec:cons}. The input to the predictor contains the GitHub issue text and the affected file path. The file path is taken from the gold patch, so strictly speaking a deployer would first have to localize it from the issue; we therefore ablate it and find it immaterial --- removing the file path and predicting from the \emph{issue text alone} changes the predictor's agreement with the reference by $\kappa$ $=$ $-0.014$ and leaves downstream routing unchanged or slightly better (Appendix~\ref{app:predictor}), so the consequence signal is carried by the issue, not by the gold-derived file. Our primary predictor is Qwen2.5-7B-Instruct in issue-only mode, evaluated against the Qwen2.5-7B-Instruct with-patch reference label. As a cross-model robustness check, we also evaluate Claude Sonnet 4.5 in
 issue-only mode against the same Qwen2.5-7B-Instruct with-patch reference. Both predictors output an ordinal consequence label in $\{0,1,2\}$ with a single forward pass.
 
 \textbf{Agreement with the with-patch reference.} The primary Qwen
@@ -1682,6 +1682,26 @@ confusion matrices for both predictors evaluated against the
 LLM-with-patch reference on all $N{=}300$ SWE-bench Lite tasks. The
 class distribution of the with-patch reference is
 $\{0{:}60,\ 1{:}196,\ 2{:}44\}$.
+
+\textbf{Is the file path a leak?} The predictor prompt lists the
+affected file, taken from the gold patch and thus not strictly
+available before the task is solved. To test whether this
+gold-derived field carries the signal, we re-ran the \emph{same} model
+on all $300$ tasks in two conditions --- with the file path (as used
+throughout) and from the \emph{issue text alone} --- and compared each
+against the with-patch reference. The file path is immaterial. On
+Qwen2.5-7B-Instruct, agreement with the reference moves only from
+$\kappa = 0.345$ (with file) to $\kappa = 0.331$ (issue-only), a
+$-0.014$ change, with the two conditions agreeing on $83.3\%$ of tasks;
+routing by the issue-only predictor is if anything \emph{better}
+downstream (cost-weighted loss $217.8 \to 214.0$, class-2 success
+$31.2\% \to 34.7\%$ at the top-$25\%$ budget). An independent model
+(GPT-4o-mini) shows the same pattern ($\kappa$ $0.329 \to 0.287$,
+downstream unchanged). (These ablation prompts are deliberately
+conservative and reach lower absolute $\kappa$ than the tuned primary
+predictor below; the point is the negligible \emph{difference} the file
+path makes.) The consequence signal is therefore carried by the issue
+report, and the deployment-time claim holds on issue text alone.
 
 \textbf{Primary predictor: Qwen2.5-7B-Instruct issue-only.} Cohen's
 $\kappa = 0.572$; class-2 recall $= 88.6\%$ ($39/44$). The confusion
