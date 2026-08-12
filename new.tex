@@ -1,11 +1,9 @@
 % Not All Errors Are Equal: Consequence-Aware Reasoning Compute Allocation
-% arXiv submission version
+% Target: ICLR 2027 (deadline ~Sept-Oct 2026)
 
 \documentclass{article}
-\usepackage{times}
-\usepackage[utf8]{inputenc}
-\usepackage[T1]{fontenc}
-\usepackage{natbib}
+\usepackage{iclr2027_conference,times}
+
 \input{math_commands.tex}
 
 \usepackage[hidelinks,colorlinks=false]{hyperref}
@@ -16,26 +14,19 @@
 \usepackage{algorithm}
 \usepackage{algorithmic}
 \usepackage{booktabs}
-\usepackage{multirow}
-\usepackage{microtype}
-\usepackage[margin=1.4in]{geometry}
-
 \title{Not All Errors Are Equal:\\Consequence-Aware Reasoning Compute Allocation}
 
-\author{
-Jingbo Wen$^{1}$ \quad
-Liang He$^{2,\ast}$ \quad
-Ziqi He$^{1}$ \\[4pt]
-$^{1}$The University of Sydney \\
-$^{2}$Shanghai Institute of Optics and Fine Mechanics \\[4pt]
-\texttt{hel@siom.ac.cn} \\[2pt]
-$^\ast$Corresponding authors
-}
+% The \author macro works with any number of authors. Use \And or \AND
+% to break the author list across columns; we go anonymous for submission.
+\author{Anonymous authors\\
+Paper under double-blind review}
 
+\newcommand{\fix}{\marginpar{FIX}}
+\newcommand{\new}{\marginpar{NEW}}
+
+% \iclrfinalcopy % Uncomment for camera-ready (double-blind submission mode when commented)
 \begin{document}
-
 \maketitle
-
 \begin{abstract}
 Modern reasoning models can allocate different amounts of test-time computation, such as thinking tokens, model calls, or compute budget, to different tasks. Existing methods generally drive this allocation by predicted difficulty and spend more compute where it is expected to raise accuracy. This implicitly assumes that all failures cost the same, since an accuracy objective weights every task equally. However, such an assumption does not hold in deployment: A typo in a log message and a migration that corrupts a production database both count as one benchmark failure, but their real-world costs are fundamentally different. 
 To fill this gap,
@@ -62,18 +53,15 @@ rule, namely that harder tasks deserve more compute.
 
 \begin{figure}[t]
 \centering
-\includegraphics[width=\linewidth]{fig_motivation.png}
-\caption{\textbf{Three contemporary thinking models do not sufficiently
-allocate compute by consequence.} Each panel summarizes one model's
-relationship between actual thinking length and our consequence label
-on SWE-bench Lite tasks. Qwen3-8B's thinking length is uncorrelated
-with consequence ($\rho = 0.002$). Qwen3-VL-8B-Thinking pins
-$99.3\%$ of tasks ($298/300$) at its 8192-token cap. Claude Sonnet 4.5 with
-extended thinking shows a statistically significant but weak
-consequence sensitivity ($\rho = 0.20$, $p = 0.008$, $n = 171$).
-Across three different allocation mechanisms, none exhibits sufficient
-consequence sensitivity to explain the gains of consequence-aware
-routing observed later in the paper.}
+\includegraphics[width=\linewidth]{1.png}
+\caption{\textbf{Current reasoning models lack consequence-aware compute allocation.}
+We audit five contemporary reasoning models on SWE-bench Lite by measuring
+the relationship between thinking computation and task consequence.
+Existing models exhibit three failure modes: no consequence sensitivity
+(Qwen3-8B, $\rho=0.002$), compute saturation (Qwen3-VL-8B-Thinking:
+$99.3\%$ at the 8192-token cap; DeepSeek-R1: $54.0\%$ at the
+24000-token cap), or weak adaptation (Claude Sonnet 4.5:
+$\rho=0.203$; o4-mini: $\rho=0.239$).}
 \label{fig:motivation}
 \end{figure}
 
