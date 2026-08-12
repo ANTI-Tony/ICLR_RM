@@ -45,6 +45,15 @@ FinQA financial reasoning, and MATH, covering $1{,}290$ tasks in total. Our resu
 Minimizing this cost-weighted loss is equivalent to maximizing the consequence-weighted success rate, and the effect is concrete: at a matched compute budget --- in a simulation over cached outcomes of $16$ public SWE-bench systems spanning capability tiers --- the fully deployment-time consequence-only scheduler raises the success rate on high-consequence tasks from $19.4\%$ (random) and $29.0\%$ (a deployment-fair predicted-difficulty baseline) to $51.1\%$, approaching the all-premium ceiling of $58.5\%$, while overall accuracy is unchanged --- the budget is simply spent where errors are costly. In loss terms this is a $21.8\%$ reduction ($17.7$--$29.9\%$ across cost mappings) over difficulty-aware routing, retaining nearly all of the oracle gain ($93.6\%$; App.~\ref{app:bootstrap}); the same ordering holds in a controlled experiment where a single fixed model allocates real best-of-$k$ attempts, isolating compute from model identity. A priority-aware variant that additionally uses empirical marginal-gain information reaches a $30.7\%$ reduction (an analysis upper bound; a split-half re-estimate shrinks the priority rows by $6$--$7$ points), showing the potential value of estimating where extra compute changes the outcome. Finally, the out-of-domain probes confirm the framework's own predictions of when the consequence edge disappears (homogeneous costs), when no signal helps (no premium headroom), and when difficulty routing prevails (positive difficulty--gain coupling on competition math).
 Notably, difficulty-aware routing with outcome-derived difficulty performs worse than random --- many of the hardest tasks remain unsolved even at the premium tier --- while deployment-time predicted difficulty performs at the level of random; on both software-engineering pools, every difficulty-routing variant trails consequence routing.
 \end{abstract}
+% \begin{abstract}
+% Modern reasoning models can allocate different amounts of test-time computation, such as thinking tokens, model calls, or compute budget, to different tasks. Existing methods generally drive this allocation by predicted difficulty and spend more compute where it is expected to raise accuracy. This implicitly assumes that all failures cost the same, since an accuracy objective weights every task equally. However, such an assumption does not hold in deployment: A typo in a log message and a migration that corrupts a production database both count as one benchmark failure, but their real-world costs are fundamentally different. 
+% To fill this gap,
+% we propose consequence-aware test-time compute allocation. Instead of routing compute by predicted difficulty, we use a lightweight predictor to estimate from the issue text how costly a task would be if solved incorrectly, and weight each task's error by that cost in the allocation objective. The scheduler then routes higher-consequence tasks to larger compute tiers or more attempts under the same total budget. The premise is an asymmetry we verify empirically: before a task is solved, the cost of getting it wrong is far more predictable than the benefit of spending more compute on it (the latter is near-random ex ante, becoming predictable only with execution feedback). A deployer should therefore route by what is knowable in advance --- the cost of an error --- and the paper's larger message is less ``consequence is a better signal'' than a decision map for \emph{which} signal to route by, whose boundary conditions we state and then confirm out of domain.
+% We conduct main experiments on SWE-bench Lite, evaluate cross-dataset behavior on Multi-SWE-bench mini, replicate the full allocation comparison on a disjoint database/ORM pool from SWE-bench Verified, and run end-to-end out-of-domain probes on BIRD text-to-SQL,
+% FinQA financial reasoning, and MATH, covering $1{,}290$ tasks in total. Our results reveal that consequence and difficulty are approximately orthogonal under various annotations, and that current thinking models do not allocate compute sufficiently according to consequence. Moreover, our issue-only predictor never misclassifies a high-consequence task as low-consequence, relative to the with-patch reference, on any of the six task pools ($0/110$). 
+% Under matched compute budgets --- in a simulation over cached outcomes of $16$ public SWE-bench systems spanning capability tiers --- the fully deployment-time consequence-only scheduler reduces cost-weighted loss by $21.8\%$ ($17.7$--$29.9\%$ across cost mappings) relative to difficulty-aware routing and retains nearly all of the corresponding oracle gain ($93.6\%$ at the reported operating point, subject to tiebreak and sampling noise; App.~\ref{app:bootstrap}); the same ordering holds in a controlled experiment where a single fixed model allocates real best-of-$k$ attempts, isolating compute from model identity. A priority-aware variant that additionally uses empirical marginal-gain information reaches a $30.7\%$ reduction (an analysis upper bound; a split-half re-estimate shrinks the priority rows by $6$--$7$ points), showing the potential value of estimating where extra compute changes the outcome. Finally, the out-of-domain probes confirm the framework's own predictions of when the consequence edge disappears (homogeneous costs), when no signal helps (no premium headroom), and when difficulty routing prevails (positive difficulty--gain coupling on competition math).
+% Notably, difficulty-aware routing with outcome-derived difficulty performs worse than random --- many of the hardest tasks remain unsolved even at the premium tier --- while deployment-time predicted difficulty performs at the level of random; on both software-engineering pools, every difficulty-routing variant trails consequence routing.
+% \end{abstract}
 \section{Introduction}
 \label{sec:intro}
 
@@ -62,18 +71,15 @@ rule, namely that harder tasks deserve more compute.
 
 \begin{figure}[t]
 \centering
-\includegraphics[width=\linewidth]{fig_motivation.png}
-\caption{\textbf{Three contemporary thinking models do not sufficiently
-allocate compute by consequence.} Each panel summarizes one model's
-relationship between actual thinking length and our consequence label
-on SWE-bench Lite tasks. Qwen3-8B's thinking length is uncorrelated
-with consequence ($\rho = 0.002$). Qwen3-VL-8B-Thinking pins
-$99.3\%$ of tasks ($298/300$) at its 8192-token cap. Claude Sonnet 4.5 with
-extended thinking shows a statistically significant but weak
-consequence sensitivity ($\rho = 0.20$, $p = 0.008$, $n = 171$).
-Across three different allocation mechanisms, none exhibits sufficient
-consequence sensitivity to explain the gains of consequence-aware
-routing observed later in the paper.}
+\includegraphics[width=\linewidth]{1.png}
+\caption{\textbf{Current reasoning models lack consequence-aware compute allocation.}
+We audit five contemporary reasoning models on SWE-bench Lite by measuring
+the relationship between thinking computation and task consequence.
+Existing models exhibit three failure modes: no consequence sensitivity
+(Qwen3-8B, $\rho=0.002$), compute saturation (Qwen3-VL-8B-Thinking:
+$99.3\%$ at the 8192-token cap; DeepSeek-R1: $54.0\%$ at the
+24000-token cap), or weak adaptation (Claude Sonnet 4.5:
+$\rho=0.203$; o4-mini: $\rho=0.239$).}
 \label{fig:motivation}
 \end{figure}
 
