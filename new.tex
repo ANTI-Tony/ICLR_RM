@@ -30,8 +30,7 @@ Paper under double-blind review}
 \begin{abstract}
 Adaptive test-time compute allocates more computation to harder or failure-prone tasks, but this difficulty-based approach overlooks that deployment failures can carry vastly different consequences. A documentation bug and a database migration error may
 count as the same benchmark failure despite very different real-world
-costs.
-%Adaptive test-time compute is typically formulated as a difficulty-based allocation problem, where additional computation is assigned to tasks that are harder or more likely to fail. This objective is natural for average-accuracy benchmarks, where all errors are weighted equally, but it ignores a key deployment property: failures have different consequences. 
+costs. 
 Under a fixed compute budget, the question is therefore
 not only where a model is likely to fail, but where failure is costly.
 However, in existing reasoning models, little attention is given to the relationship between compute allocation and the degrees of consequence of tasks and its use for optimising the computing allocation in terms of the consequence of tasks within a fixed overall compute budget. In this paper, we study consequence-aware test-time compute allocation, where each task is assigned a consequence label and computation is routed according to the expected cost of failure. A lightweight scheduler estimates
@@ -47,7 +46,6 @@ to $51.1\%$, while overall accuracy remains nearly unchanged. This
 reduces cost-weighted loss by $21.8\%$ relative to difficulty-aware
 routing and retains $93.6\%$ of the oracle-consequence gain. A
 controlled within-model best-of-$k$ experiment confirms the same trend.
-%The central implication is that adaptive inference should consider not only where models fail, but where failures matter.
 \end{abstract}
 \section{Introduction}
 \label{sec:intro}
@@ -74,23 +72,20 @@ However, as Figure~\ref{fig:motivation}(b) shows, high-consequence tasks have su
 \begin{figure}[t]
 \centering
 \includegraphics[width=\linewidth]{fig1_motivation.pdf}
-\caption{\textbf{Motivation for consequence-aware compute allocation.}
-(a) Native reasoning computation is not reliably aligned with error
-consequence. Across five contemporary reasoning models, computation is
-either nearly flat across consequence classes, weakly adaptive, or
-saturated at the token budget. Reported values indicate the
-within-model rank correlation between computation and consequence, or
-the fraction of tasks that hit the token cap.
-(b) High-consequence tasks nevertheless have substantial compute
-headroom. In the 16-system SWE-bench compute tier, class-2 tasks improve
-from $7\%$ success under low compute to $59\%$ under high compute,
-showing that they are not simply hopeless tasks.}
+\caption{\textbf{Native reasoning compute is not consequence-aware, despite
+available headroom.}
+(a) Across five reasoning models, native computation is weakly aligned
+with task consequence, absent, or saturated at the token budget.
+Numbers denote Spearman correlation with consequence or the fraction of
+tasks hitting the cap.
+(b) High-consequence tasks are not hopeless: in the 16-system
+SWE-bench compute tier, class-2 success increases from $7\%$ under the
+cheap tier to $59\%$ under the premium tier.}
 \label{fig:motivation}
 \end{figure}
 
 %Motivated by this observation, we introduce a new objective for allocating compututation resource according to the consequence of task failures under a fixed computation budget. We introduce consequence-aware test-time compute allocation, which incorporates error impact as an explicit routing factor. A lightweight predictor estimates consequence from deployment-time inputs (issue description and file references), without accessing gold patches or execution outcomes; a scheduler then routes higher-consequence tasks to stronger compute under the same budget. 
 Motivated by this observation, we introduce consequence-aware test-time compute allocation, which explicitly accounts for the cost of failure under a fixed compute budget. More specifically, we design a lightweight predictor to estimate consequence from deployment-time inputs, without access to gold patches or execution outcomes, and a scheduler to allocate higher-consequence tasks with more computing resources. Unlike difficulty, consequence captures the cost of failure rather than uncertainty and can be estimated before solving the tasks, unlike marginal gains (Appendices~\ref{app:marginal} and~\ref{app:whyfail}). Our scheduler uses only consequence for routing priority-aware variants with marginal gains are diagnostic upper bounds. On SWE-bench Lite, consequence-aware routing shifts success toward high-consequence tasks without improving overall accuracy, and a deployment-time predictor retains most of the oracle gain. Additional experiments examine transfer, alternative compute, and boundary conditions (Appendices~\ref{app:crossdataset}, \ref{app:seconddomain}, \ref{app:within}, and~\ref{app:ood}).
-
 The main contributions of this paper are as follows:
 \begin{itemize}
 
@@ -188,23 +183,19 @@ automatically consequence-aware.
 
 \textbf{Definition.}
 We define the consequence of a task as the deployment cost of an
-incorrect answer. In this paper we use a coarse ordinal label
-$c(x)\in\{0,1,2\}$:
-\begin{itemize}\itemsep0pt
-  \item \textbf{0 (low).} Cosmetic, formatting, documentation, or
-  log-message errors. These may be visible to users but do not corrupt
-  downstream systems.
-  \item \textbf{1 (medium).} Functional but contained errors, such as
-  a wrong return value, a crash on an edge case, or a locally
-  recoverable feature failure.
-  \item \textbf{2 (high).} Silent data corruption, security or
-  permission bypass, irreversible operations such as deletion,
-  overwriting, or migration errors, or incorrect results consumed
-  downstream without timely visibility.
-\end{itemize}
-The labels are not intended to be calibrated monetary costs. They are
-a minimal ordinal representation of deployment harm, chosen because it
-can be applied consistently by both LLM judges and human annotators.
+incorrect answer. In this paper, consequence is represented by a coarse
+ordinal label $c(x)\in\{0,1,2\}$. Low-consequence errors
+($c(x)=0$) include cosmetic, formatting, documentation, or log-message
+failures that may be visible but do not corrupt downstream systems.
+Medium-consequence errors ($c(x)=1$) include contained functional
+failures, such as wrong return values, edge-case crashes, or locally
+recoverable feature errors. High-consequence errors ($c(x)=2$) include
+silent data corruption, security or permission bypass, irreversible
+deletion, overwriting, migration errors, or incorrect results consumed
+downstream without timely visibility.
+These labels are not calibrated monetary costs. They are a minimal
+ordinal representation of deployment harm, chosen because they can be
+applied consistently by both LLM judges and human annotators.
 Appendix~\ref{app:costmap} shows that the qualitative allocation
 results are stable under alternative monotone mappings and continuous
 severity scores.
@@ -432,18 +423,16 @@ All routing strategies are evaluated under the same matched compute budget. Spec
 \begin{figure}[t]
 \centering
 \includegraphics[width=\linewidth]{fig2_main.pdf}
-\caption{\textbf{Consequence-aware routing reallocates success to costly
-failures under the same compute budget.}
-(a) On high-consequence class-2 tasks, consequence-aware routing raises
-success to $51.1\%$, compared with $19.4\%$ under random routing and
-$29.0\%$ under deployment-time predicted difficulty.
-(b) The improvement comes from reallocation rather than additional
-compute: success is shifted across consequence classes, explaining why
-overall accuracy remains nearly flat while class-2 success increases
-sharply.
-(c) This redistribution reduces cost-weighted loss by $21.8\%$ relative
-to difficulty-aware routing. Priority-aware routing gives a diagnostic
-upper bound by additionally using empirical marginal gain.}
+\caption{\textbf{Consequence-aware routing shifts success toward costly
+failures.}
+(a) Under the same premium-compute budget, class-2 success rises to
+$51.1\%$ with consequence-aware routing, compared with $19.4\%$ under
+random routing and $29.0\%$ under deployment-time predicted difficulty.
+(b) The improvement comes from redistribution across consequence
+classes rather than a uniform accuracy gain.
+(c) The resulting allocation reduces cost-weighted loss; priority-aware
+routing is shown as a diagnostic upper bound using empirical marginal
+gain.}
 \label{fig:main}
 \end{figure}
 We evaluate all strategies using cost-weighted loss:
@@ -452,7 +441,12 @@ where $c(x)$ denotes the consequence label and $p_{T(x)}(x)$ denotes the success
 
 \begin{table}[t]
 \centering
-\caption{\textbf{Main routing results on SWE-bench Lite.} All strategies route the same top-$25\%$ fraction of tasks to the premium tier. The deployment-time Qwen consequence router raises high-consequence (class-2) success from $19.4\%$ under random routing and $29.0\%$ under deployment-time predicted difficulty to $51.1\%$, while overall accuracy is nearly unchanged. The gain is therefore not an average accuracy gain; it is a reallocation of compute toward tasks where errors are costly. Priority-aware rows use empirical marginal gain and are analysis variants rather than deployment-time schedulers.}
+\caption{\textbf{Main routing results on SWE-bench Lite.}
+All strategies route the same top-$25\%$ fraction of tasks to the
+premium tier. Consequence-aware routing reduces cost-weighted loss and
+raises high-consequence success under the matched compute budget.
+Priority-aware rows use empirical marginal gain and are analysis
+variants rather than deployment-time schedulers.}
 \label{tab:main}
 \small
 \begin{tabular}{lrrrr}
@@ -467,8 +461,8 @@ Consequence-aware (Claude issue-only)                      & $220.50$ & $+17.8\%
 Consequence-aware (Qwen issue-only; deployment-time)        & $209.75$ & $+21.8\%$ & $\mathbf{51.1\%}$ & $0.184$ \\
 Consequence-aware (with-patch oracle)                       & $205.75$ & $+23.3\%$ & $58.5\%$ & $0.187$ \\
 \midrule
-Priority-aware (Qwen consequence $\times$ marginal gain)    & $\mathbf{186.00}$ & $\mathbf{+30.7\%}$ & $50.6\%$ & $\mathbf{0.274}$ \\
-Priority-aware (oracle consequence $\times$ marginal gain)  & $179.75$ & $+33.0\%$ & $55.1\%$ & $0.278$ \\
+Priority-aware (Qwen consequence $\times$ marginal gain)    & $186.00$ & $+30.7\%$ & $50.6\%$ & $0.274$ \\
+Priority-aware (oracle consequence $\times$ marginal gain)  & $\mathbf{179.75}$ & $\mathbf{+33.0\%}$ & $55.1\%$ & $\mathbf{0.278}$ \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -495,7 +489,10 @@ The 16-system experiment is realistic but confounds compute with model identity 
 
 \begin{table}[t]
 \centering
-\caption{\textbf{Controlled within-model allocation.} A single fixed Claude Sonnet~4.5 agent is used for all tasks; compute is only the number of best-of-$k$ attempts. The same strategy ordering holds when model identity and prompt are fixed, showing that the effect is not an artifact of routing across heterogeneous model tiers. Full protocol, second-judge replication, dynamic caps, and no-oracle verifier-based sequential policies are in Appendix~\ref{app:within}.}
+\caption{\textbf{Controlled within-model allocation.}
+Using a single fixed Claude Sonnet~4.5 agent, compute is varied only
+through the number of best-of-$k$ attempts. The same strategy ordering
+holds when model identity and prompt are fixed.}
 \label{tab:withinmain}
 \small
 \begin{tabular}{lrrl}
@@ -516,20 +513,17 @@ Table~\ref{tab:withinmain} reproduces the same qualitative ordering: difficulty-
 \begin{figure}[t]
 \centering
 \includegraphics[width=\linewidth]{fig3_generalization.pdf}
-\caption{\textbf{Generalization, external validity, and boundary
-conditions.}
-(a) Consequence-aware routing helps when error costs are heterogeneous
-and difficulty is not aligned with marginal compute gain. It wins on
-SWE-style software tasks, while difficulty wins on MATH, where harder
-tasks are exactly those that benefit from additional reasoning.
-BIRD and FinQA lie near the boundary where either cost heterogeneity or
-compute headroom is limited.
-(b) Consequence labels align with maintainer triage behavior. In Django
-Trac, the fraction of maintainer-assigned ``Bug'' issues rises from
-$27\%$ for class~0 to $70\%$ for class~1 and $79\%$ for class~2.
-(c) In MATH, declared dollar stakes can flip the preferred routing
-strategy: consequence-aware routing overtakes difficulty-aware routing
-once the high-to-low cost spread reaches roughly $30\times$.}
+\caption{\textbf{Consequence-aware routing is cost-structure dependent.}
+(a) Routing gains vary across domains: consequence-aware routing helps
+on SWE-style software tasks, while difficulty-aware routing wins on
+MATH, where harder tasks also benefit more from additional reasoning.
+BIRD and FinQA lie closer to the boundary regime.
+(b) Consequence labels align with maintainer triage behavior in Django
+Trac, where maintainer-assigned ``Bug'' rates increase from $27\%$ to
+$70\%$ and $79\%$ across consequence classes.
+(c) In MATH, increasing the high-to-low dollar-stakes spread can flip
+the preferred routing strategy, with consequence-aware routing
+overtaking difficulty-aware routing at roughly $30\times$.}
 \label{fig:generalization}
 \end{figure}
 
